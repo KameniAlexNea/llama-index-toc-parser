@@ -1,0 +1,13 @@
+tox
+black
+flake8
+isort
+autoflake
+mypy
+safety
+sphinx
+wheel
+twine
+build
+pickleshare
+coverage
