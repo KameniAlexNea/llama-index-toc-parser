@@ -170,7 +170,7 @@ Final content
             f.write(self.hierarchical_markdown)
 
         # Test using convenience function
-        from node_chunker.document_chunking import (
+        from node_chunker.chunks import (
             chunk_document_by_toc_to_text_nodes,
         )
 
