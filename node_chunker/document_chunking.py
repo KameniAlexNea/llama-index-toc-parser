@@ -135,6 +135,11 @@ class BaseDocumentChunker(ABC):
             "file_name": os.path.basename(self.source_display_name),
         }
 
+        # Create a context path showing the hierarchy of titles
+        context = self._build_context_path(toc_node)
+        if context:
+            metadata["context"] = context
+
         # Add page information if available
         if hasattr(toc_node, "page_num"):
             page_label = str(toc_node.page_num + 1)
@@ -148,6 +153,35 @@ class BaseDocumentChunker(ABC):
                 metadata["end_page_idx"] = toc_node.end_page
 
         return metadata
+
+    def _build_context_path(self, toc_node: TOCNode) -> str:
+        """
+        Build a hierarchical context path string showing all parent titles.
+
+        Format: "parent1 > parent2 > parent3 > ... > current_node"
+
+        Args:
+            toc_node: The TOC node to build context for
+
+        Returns:
+            A string representing the hierarchical context path
+        """
+        if not toc_node:
+            return ""
+
+        # Start with an empty list
+        path_elements = []
+
+        # Traverse up the parent chain
+        current = toc_node
+        while current:
+            # Skip adding "Document Root" to the context path
+            if current.title != "Document Root":
+                path_elements.insert(0, current.title)
+            current = current.parent
+
+        # Join all elements with " > " separator
+        return " > ".join(path_elements)
 
     def _create_node_relationships(
         self, toc_node: TOCNode, node_id_map: Dict[int, str]
