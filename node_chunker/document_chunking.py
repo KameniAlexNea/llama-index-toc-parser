@@ -89,7 +89,7 @@ class PDFTOCChunker:
 
         return self.root_node
 
-    def _process_outline(self, toc_items, parent_node, level=1):
+    def _process_outline(self, toc_items, parent_node: TOCNode, level=1):
         """
         Process TOC items into our node tree.
 
@@ -220,7 +220,7 @@ class PDFTOCChunker:
         """Get a flattened list of all nodes in the TOC tree"""
         nodes = []
 
-        def collect_nodes(node):
+        def collect_nodes(node: TOCNode):
             nodes.append(node)
             for child in node.children:
                 collect_nodes(child)
