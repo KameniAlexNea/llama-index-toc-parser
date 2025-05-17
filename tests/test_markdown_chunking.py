@@ -11,6 +11,9 @@ class TestMarkdownChunking(unittest.TestCase):
         # Create test directory if it doesn't exist
         self.test_dir = os.path.join(os.path.dirname(__file__), "test_files")
         os.makedirs(self.test_dir, exist_ok=True)
+        
+        # Track files created during tests for cleanup
+        self.test_files_to_cleanup = []
 
         # Sample markdown with a hierarchical structure
         self.hierarchical_markdown = """# Top Level Heading
@@ -50,6 +53,12 @@ Nested content
 ## Section 2
 Final content
 """
+
+    def tearDown(self):
+        """Clean up any files created during tests"""
+        for file_path in self.test_files_to_cleanup:
+            if os.path.exists(file_path):
+                os.remove(file_path)
 
     def test_no_headers(self):
         """Test chunking a markdown document with no headers"""
@@ -168,6 +177,9 @@ Final content
         test_file_path = os.path.join(self.test_dir, "test_markdown.md")
         with open(test_file_path, "w") as f:
             f.write(self.hierarchical_markdown)
+            
+        # Add to cleanup list
+        self.test_files_to_cleanup.append(test_file_path)
 
         # Test using convenience function
         from node_chunker.chunks import (
