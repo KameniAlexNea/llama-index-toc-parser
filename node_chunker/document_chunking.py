@@ -1,15 +1,15 @@
 import os
 import uuid
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
 
 from llama_index.core.schema import (
-    TextNode,
     NodeRelationship,
-    RelatedNodeInfo,
     ObjectType,
+    RelatedNodeInfo,
+    TextNode,
 )
+from pydantic import BaseModel, Field
 
 
 class TOCNode(BaseModel):
@@ -54,7 +54,6 @@ class BaseDocumentChunker(ABC):
     @abstractmethod
     def load_document(self) -> None:
         """Load the document and extract its structure"""
-        pass
 
     @abstractmethod
     def build_toc_tree(self) -> TOCNode:
@@ -64,7 +63,6 @@ class BaseDocumentChunker(ABC):
         Returns:
             The root node of the TOC tree
         """
-        pass
 
     def get_all_nodes(self) -> List[TOCNode]:
         """Get a flattened list of all nodes in the TOC tree"""
@@ -217,7 +215,6 @@ class BaseDocumentChunker(ABC):
     @abstractmethod
     def close(self) -> None:
         """Close the document and free resources"""
-        pass
 
     def __enter__(self):
         self.load_document()

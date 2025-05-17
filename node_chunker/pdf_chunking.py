@@ -1,13 +1,5 @@
 import fitz  # PyMuPDF
-import requests
-import tempfile
-import os
-from typing import List
 
-from llama_index.core.schema import (
-    TextNode,
-    NodeRelationship,
-)
 from .document_chunking import BaseDocumentChunker, TOCNode
 
 
@@ -217,4 +209,3 @@ class PDFTOCChunker(BaseDocumentChunker):
             self.doc.close()
             self.doc = None  # Ensure it's None after closing
             self._document_loaded = False
-

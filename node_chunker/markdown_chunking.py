@@ -43,7 +43,7 @@ class MarkdownTOCChunker(BaseDocumentChunker):
 
         # Initialize the document tree
         self.root_node = TOCNode(title="Document Root", page_num=0, level=0)
-        current_node = self.root_node
+        self.root_node
 
         # Find all headers and their respective line numbers
         headers = self._extract_headers()
