@@ -23,4 +23,4 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[test,dev]
       - name: Run tests
-        run: pytest --cov=node_chunker tests/
+        run: python -m unittest discover -s tests
