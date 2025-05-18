@@ -1,2 +1,2 @@
-llama-index-core
-pymupdf
+llama-index-core==0.12.36
+pymupdf==1.25.5

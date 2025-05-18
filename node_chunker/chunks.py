@@ -2,7 +2,6 @@ import os
 import tempfile
 from typing import List
 
-import fitz  # PyMuPDF
 import requests
 from llama_index.core.schema import TextNode
 
