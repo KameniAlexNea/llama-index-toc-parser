@@ -45,13 +45,10 @@ Repository = "https://github.com/KameniAlexNea/llama-index-toc-parser"
 
 [project.optional-dependencies]
 test = [
-    "pytest>=8.0",
-    "pytest-cov>=4.0",
-    "pytest-mock>=3.10",
+    "coverage>=5.0", # For unittest coverage
 ]
 dev = [
     "tox",
-    "pytest>=8.0", # For running tests in dev env
     "sphinx",
     "wheel",
     "twine",
@@ -64,7 +61,7 @@ dev = [
     "pre-commit>=3.0",
     "pylint>=2.15,<4.0", # Optional, as Ruff covers many checks
     "safety",
-    # pytest-cov is in 'test' group, usually sufficient
+    "coverage>=5.0", # For unittest coverage
 ]
 
 [tool.codespell]
@@ -102,7 +99,7 @@ exclude = [
     "build",
     "examples",
     "tests",
-    ".venv",
+    "venv",
     ".tox",
     ".eggs",
     "__pycache__",
@@ -117,7 +114,6 @@ lint.select = [
     "ANN", # flake8-annotations
     "B",  # flake8-bugbear
     "C4", # flake8-comprehensions
-    "PT", # flake8-pytest-style
     "RUF", # Ruff-specific rules
     "D", # pydocstyle (if you want to enforce it via ruff)
 ]
