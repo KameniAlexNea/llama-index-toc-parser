@@ -18,7 +18,7 @@ The `node_chunker` package provides tools to intelligently split documents (PDF 
 ## Installation
 
 ```bash
-pip install git+git@github.com:KameniAlexNea/llama-index-toc-parser.git
+pip install git+https://github.com/KameniAlexNea/llama-index-toc-parser.git
 ```
 
 ## Usage
