@@ -1,3 +1,11 @@
+"""Example script to demonstrate the usage of the chunk_document_by_toc_to_text_nodes function.
+This script takes a file path, URL, or raw markdown text as input and processes it to generate text nodes based on the document's table of contents (TOC).
+It uses the argparse library for command-line argument parsing and logging for output.
+
+python example/main.py --source example/test_markdown.pdf -v &> nohup.out &
+python example/main.py --source example/test_markdown.md -md -v &> nohup.out &
+"""
+
 import argparse
 import logging
 
