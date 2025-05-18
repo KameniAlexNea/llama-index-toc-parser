@@ -1,3 +1,4 @@
+import logging
 import os
 import tempfile
 from typing import List
@@ -7,6 +8,9 @@ from llama_index.core.schema import TextNode
 
 from node_chunker.markdown_chunking import MarkdownTOCChunker
 from node_chunker.pdf_chunking import PDFTOCChunker
+
+# Get logger for this module
+logger = logging.getLogger(__name__)
 
 
 def download_pdf_from_url(url: str) -> str:
@@ -34,7 +38,7 @@ def download_pdf_from_url(url: str) -> str:
 
         return temp_path
     except Exception as e:
-        print(f"Error downloading PDF from URL: {e}")
+        logger.error(f"Error downloading PDF from URL: {e}")
         raise
 
 
@@ -81,7 +85,7 @@ def chunk_document_by_toc_to_text_nodes(
                 is_url = source.startswith(("http://", "https://", "ftp://"))
 
             if is_url:
-                print(f"Downloading PDF from URL: {source}")
+                logger.info(f"Downloading PDF from URL: {source}")
                 temp_file_path = download_pdf_from_url(source)
                 actual_source_path = temp_file_path
 

@@ -1,6 +1,11 @@
+import logging
+
 import fitz  # PyMuPDF
 
 from .document_chunking import BaseDocumentChunker, TOCNode
+
+# Get logger for this module
+logger = logging.getLogger(__name__)
 
 
 class PDFTOCChunker(BaseDocumentChunker):
@@ -30,9 +35,9 @@ class PDFTOCChunker(BaseDocumentChunker):
             self._document_loaded = True
 
             if not self.toc:
-                print("Warning: No TOC found in the document.")
+                logger.warning("No TOC found in the document.")
         except Exception as e:
-            print(f"Error loading PDF: {e}")
+            logger.error(f"Error loading PDF: {e}")
             raise
 
     def build_toc_tree(self) -> TOCNode:

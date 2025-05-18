@@ -1,7 +1,11 @@
+import logging
 import re
 from typing import List, Tuple
 
 from .document_chunking import BaseDocumentChunker, TOCNode
+
+# Get logger for this module
+logger = logging.getLogger(__name__)
 
 
 class MarkdownTOCChunker(BaseDocumentChunker):
@@ -28,7 +32,7 @@ class MarkdownTOCChunker(BaseDocumentChunker):
             self.lines = self.markdown_text.splitlines()
             self._document_loaded = True
         except Exception as e:
-            print(f"Error loading markdown: {e}")
+            logger.error(f"Error loading markdown: {e}")
             raise
 
     def build_toc_tree(self) -> TOCNode:
