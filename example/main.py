@@ -1,8 +1,20 @@
+"""Example script to demonstrate the usage of the chunk_document_by_toc_to_text_nodes function.
+This script takes a file path, URL, or raw markdown text as input and processes it to generate text nodes based on the document's table of contents (TOC).
+It uses the argparse library for command-line argument parsing and logging for output.
+
+python example/main.py --source example/test_markdown.pdf -v &> nohup.out &
+python example/main.py --source example/test_markdown.md -md -v &> nohup.out &
+"""
+
 import argparse
+import logging
 
 from llama_index.core.schema import NodeRelationship
 
 from node_chunker.chunks import chunk_document_by_toc_to_text_nodes
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Example usage
 if __name__ == "__main__":
@@ -29,37 +41,50 @@ if __name__ == "__main__":
         "--verbose", "-v", action="store_true", help="Print detailed information"
     )
 
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+        help="Set the logging level",
+    )
+
     args = parser.parse_args()
+
+    # Configure logging based on arguments
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
 
     source_path_or_url = args.source
     is_url = None if not args.url else True
     is_markdown = args.markdown
 
     if is_markdown:
-        print(f"Processing Markdown: {source_path_or_url}")
+        logger.info(f"Processing Markdown: {source_path_or_url}")
     elif is_url or source_path_or_url.startswith(("http://", "https://", "ftp://")):
-        print(f"Processing PDF from URL: {source_path_or_url}")
+        logger.info(f"Processing PDF from URL: {source_path_or_url}")
     else:
-        print(f"Processing local PDF: {source_path_or_url}")
+        logger.info(f"Processing local PDF: {source_path_or_url}")
 
     text_nodes = chunk_document_by_toc_to_text_nodes(
         source_path_or_url, is_url=is_url, is_markdown=is_markdown
     )
 
-    print(f"\nGenerated {len(text_nodes)} TextNode(s):")
+    logger.info(f"\nGenerated {len(text_nodes)} TextNode(s):")
     for i, tn in enumerate(text_nodes):
-        print(f"\n--- TextNode {i+1} ---")
-        print(f"ID: {tn.id_}")
+        logger.info(f"\n--- TextNode {i+1} ---")
+        logger.info(f"ID: {tn.id_}")
 
         if args.verbose:
-            print(f"Text: {tn.text}")
+            logger.info(f"Text: {tn.text}")
         else:
             text_snippet = (
                 (tn.text[:150] + "...") if tn.text and len(tn.text) > 150 else tn.text
             )
-            print(f"Text snippet: {text_snippet if text_snippet else 'None'}")
+            logger.info(f"Text snippet: {text_snippet if text_snippet else 'None'}")
 
-        print(f"Metadata: {tn.metadata}")
+        logger.info(f"Metadata: {tn.metadata}")
 
         # Print relationship summary
         rel_summary = {}
@@ -71,10 +96,10 @@ if __name__ == "__main__":
             rel_summary["CHILDREN"] = [
                 r.node_id for r in tn.relationships[NodeRelationship.CHILD]
             ]
-        print(f"Relationships Summary: {rel_summary}")
+        logger.info(f"Relationships Summary: {rel_summary}")
 
         if (
             i >= 4 and len(text_nodes) > 5 and not args.verbose
         ):  # Print first few and stop if too many
-            print(f"\n... and {len(text_nodes) - (i+1)} more TextNode(s).")
+            logger.info(f"\n... and {len(text_nodes) - (i+1)} more TextNode(s).")
             break

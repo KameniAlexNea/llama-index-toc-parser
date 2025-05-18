@@ -9,7 +9,7 @@ class TestIntegration(unittest.TestCase):
         # Create test directory and files
         self.test_dir = os.path.join(os.path.dirname(__file__), "test_files")
         os.makedirs(self.test_dir, exist_ok=True)
-        
+
         # Track files created during tests for cleanup
         self.test_files_to_cleanup = []
 
@@ -29,10 +29,10 @@ This is section 2.
         self.markdown_path = os.path.join(self.test_dir, "integration_test.md")
         with open(self.markdown_path, "w") as f:
             f.write(self.test_markdown)
-        
+
         # Add to cleanup list
         self.test_files_to_cleanup.append(self.markdown_path)
-    
+
     def tearDown(self):
         """Clean up any files created during tests"""
         for file_path in self.test_files_to_cleanup:

@@ -11,7 +11,7 @@ class TestMarkdownChunking(unittest.TestCase):
         # Create test directory if it doesn't exist
         self.test_dir = os.path.join(os.path.dirname(__file__), "test_files")
         os.makedirs(self.test_dir, exist_ok=True)
-        
+
         # Track files created during tests for cleanup
         self.test_files_to_cleanup = []
 
@@ -177,14 +177,12 @@ Final content
         test_file_path = os.path.join(self.test_dir, "test_markdown.md")
         with open(test_file_path, "w") as f:
             f.write(self.hierarchical_markdown)
-            
+
         # Add to cleanup list
         self.test_files_to_cleanup.append(test_file_path)
 
         # Test using convenience function
-        from node_chunker.chunks import (
-            chunk_document_by_toc_to_text_nodes,
-        )
+        from node_chunker.chunks import chunk_document_by_toc_to_text_nodes
 
         text_nodes = chunk_document_by_toc_to_text_nodes(
             test_file_path, is_markdown=True
