@@ -125,7 +125,7 @@ This structure is particularly valuable for:
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - llama-index-core
 - PyMuPDF (fitz)
 - requests
@@ -137,7 +137,7 @@ To set up the development environment:
 ```bash
 git clone https://github.com/KameniAlexNea/llama-index-toc-parser.git
 cd llama-index-toc-parser
-pip install -e ".[test]"
+pip install -e ".[dev]"
 ```
 
 Run tests with:
@@ -148,4 +148,4 @@ tox
 
 ## License
 
-This project is licensed under [LICENSE] - see the LICENSE file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.
