@@ -8,6 +8,7 @@ from llama_index.core.schema import TextNode
 
 from node_chunker.markdown_chunking import MarkdownTOCChunker
 from node_chunker.pdf_chunking import PDFTOCChunker
+from node_chunker.html_chunking import HTMLTOCChunker
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
@@ -43,16 +44,17 @@ def download_pdf_from_url(url: str) -> str:
 
 
 def chunk_document_by_toc_to_text_nodes(
-    source: str, is_url: bool = None, is_markdown: bool = False
+    source: str, is_url: bool = None, is_markdown: bool = False, is_html: bool = False
 ) -> List[TextNode]:
     """
     Convenience function to create a TOC-based hierarchical chunking of a document
     and return it as a list of LlamaIndex TextNode objects.
 
     Args:
-        source: Path to the document file or URL, or markdown text content
+        source: Path to the document file or URL, or content text
         is_url: Force URL interpretation if True, file path if False, or auto-detect if None
-        is_markdown: Whether the source is markdown text (True) or a PDF file/URL (False)
+        is_markdown: Whether the source is markdown text (True) or a PDF/HTML file/URL (False)
+        is_html: Whether the source is HTML content (True) or a PDF/Markdown file/URL (False)
 
     Returns:
         A list of TextNode objects representing the document chunks.
@@ -76,6 +78,28 @@ def chunk_document_by_toc_to_text_nodes(
                 source_name_for_metadata = "markdown_text"  # Default name
 
             with MarkdownTOCChunker(markdown_text, source_name_for_metadata) as chunker:
+                chunker.build_toc_tree()
+                return chunker.get_text_nodes()
+        elif is_html:
+            # HTML handling
+            is_file_path = os.path.exists(source) and not is_url
+
+            if is_file_path:
+                # It's a file path to an HTML file
+                with open(source, "r", encoding="utf-8") as f:
+                    html_content = f.read()
+            elif is_url:
+                # Download HTML content from URL
+                response = requests.get(source)
+                response.raise_for_status()
+                html_content = response.text
+                source_name_for_metadata = source  # Use URL as source name
+            else:
+                # It's the HTML content itself
+                html_content = source
+                source_name_for_metadata = "html_content"  # Default name
+
+            with HTMLTOCChunker(html_content, source_name_for_metadata) as chunker:
                 chunker.build_toc_tree()
                 return chunker.get_text_nodes()
         else:
