@@ -50,7 +50,7 @@ pip install "node-chunker[html,docx]"
 
 # Install all format support
 pip install "node-chunker[all]"
-```
+
 
 ## Usage
 
