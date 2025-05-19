@@ -182,10 +182,13 @@ Final content
         self.test_files_to_cleanup.append(test_file_path)
 
         # Test using convenience function
-        from node_chunker.chunks import chunk_document_by_toc_to_text_nodes
+        from node_chunker.chunks import (
+            DocumentFormat,
+            chunk_document_by_toc_to_text_nodes,
+        )
 
         text_nodes = chunk_document_by_toc_to_text_nodes(
-            test_file_path, is_markdown=True
+            test_file_path, format_type=DocumentFormat.MARKDOWN
         )
 
         # Verify results

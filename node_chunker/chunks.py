@@ -11,6 +11,7 @@ from llama_index.core.schema import TextNode
 # Get logger for this module
 logger = logging.getLogger(__name__)
 
+
 # Define document format enum
 class DocumentFormat(str, Enum):
     PDF = "pdf"
@@ -19,7 +20,7 @@ class DocumentFormat(str, Enum):
     MARKDOWN = "md"
     JUPYTER = "jupyter"
     RST = "rst"
-    
+
     @classmethod
     def from_extension(cls, filename: str) -> Optional["DocumentFormat"]:
         """Determine format from file extension"""
@@ -121,21 +122,27 @@ def _import_chunker_class(format_type: DocumentFormat):
     try:
         if format_type == DocumentFormat.PDF:
             from node_chunker.pdf_chunking import PDFTOCChunker
+
             return PDFTOCChunker
         elif format_type == DocumentFormat.DOCX:
             from node_chunker.docx_chunking import DOCXTOCChunker
+
             return DOCXTOCChunker
         elif format_type == DocumentFormat.HTML:
             from node_chunker.html_chunking import HTMLTOCChunker
+
             return HTMLTOCChunker
         elif format_type == DocumentFormat.MARKDOWN:
             from node_chunker.md_chunking import MarkdownTOCChunker
+
             return MarkdownTOCChunker
         elif format_type == DocumentFormat.JUPYTER:
             from node_chunker.jupyter_chunking import JupyterNotebookTOCChunker
+
             return JupyterNotebookTOCChunker
         elif format_type == DocumentFormat.RST:
             from node_chunker.rst_chunking import RSTTOCChunker
+
             return RSTTOCChunker
     except ImportError as e:
         logger.warning(f"Failed to import chunker for {format_type}: {e}")
@@ -146,13 +153,6 @@ def chunk_document_by_toc_to_text_nodes(
     source: str,
     is_url: bool = None,
     format_type: Optional[Union[DocumentFormat, str]] = None,
-    # Deprecated parameters - kept for backward compatibility
-    is_markdown: bool = False,
-    is_html: bool = False,
-    is_docx: bool = False,
-    is_jupyter: bool = False,
-    is_rst: bool = False,
-    supported_formats: Union[str, List[str]] = None,  # Deprecated
 ) -> List[TextNode]:
     """
     Create a TOC-based hierarchical chunking of a document and return TextNode objects.
@@ -161,30 +161,14 @@ def chunk_document_by_toc_to_text_nodes(
         source: Path to the document file or URL, or content text
         is_url: Force URL interpretation if True, file path if False, or auto-detect if None
         format_type: Document format to use (PDF by default if not specified)
-        
-        # Deprecated parameters - kept for backward compatibility
-        is_markdown, is_html, is_docx, is_jupyter, is_rst: Boolean flags (deprecated)
-        supported_formats: Deprecated and ignored
 
     Returns:
         A list of TextNode objects representing the document chunks.
     """
-    # Legacy parameter handling: convert boolean flags to format_type if necessary
+    # Try to auto-detect format from file extension if not specified
     if format_type is None:
-        if is_markdown:
-            format_type = DocumentFormat.MARKDOWN
-        elif is_html:
-            format_type = DocumentFormat.HTML
-        elif is_docx:
-            format_type = DocumentFormat.DOCX
-        elif is_jupyter:
-            format_type = DocumentFormat.JUPYTER
-        elif is_rst:
-            format_type = DocumentFormat.RST
-        else:
-            # Try to auto-detect format from file extension
-            detected_format = DocumentFormat.from_extension(source)
-            format_type = detected_format if detected_format else DocumentFormat.PDF
+        detected_format = DocumentFormat.from_extension(source)
+        format_type = detected_format if detected_format else DocumentFormat.PDF
 
     # Ensure format_type is a DocumentFormat enum
     if isinstance(format_type, str):
@@ -320,7 +304,7 @@ def chunk_document_by_toc_to_text_nodes(
             ) as chunker:
                 chunker.build_toc_tree()
                 return chunker.get_text_nodes()
-        
+
         else:
             raise ValueError(f"Unsupported format type: {format_type}")
 

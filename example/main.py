@@ -42,7 +42,9 @@ Examples:
         """,
     )
 
-    parser.add_argument("--source", required=True, help="Path to file, URL, or raw text content")
+    parser.add_argument(
+        "--source", required=True, help="Path to file, URL, or raw text content"
+    )
 
     # Format specification
     format_group = parser.add_argument_group("Format Options")
@@ -51,33 +53,33 @@ Examples:
         choices=[f.value for f in DocumentFormat],
         help="Explicitly specify the document format",
     )
-    
-    # Legacy format flags (for backward compatibility)
+
     format_group.add_argument(
-        "--markdown", "-md", action="store_true", 
-        help="Process input as Markdown (legacy option, use --format md instead)"
-    )
-    
-    format_group.add_argument(
-        "--list-formats", action="store_true", 
-        help="List available document format types with current dependencies"
+        "--list-formats",
+        action="store_true",
+        help="List available document format types with current dependencies",
     )
 
     # URL handling
     parser.add_argument(
-        "--url", action="store_true", 
-        help="Force interpret source as URL (auto-detected by default)"
+        "--url",
+        action="store_true",
+        help="Force interpret source as URL (auto-detected by default)",
     )
 
     # Output control
     output_group = parser.add_argument_group("Output Options")
     output_group.add_argument(
-        "--verbose", "-v", action="store_true", 
-        help="Print detailed information including full text content"
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Print detailed information including full text content",
     )
     output_group.add_argument(
-        "--max-nodes", type=int, default=None,
-        help="Maximum number of nodes to display (default: all)"
+        "--max-nodes",
+        type=int,
+        default=None,
+        help="Maximum number of nodes to display (default: all)",
     )
     output_group.add_argument(
         "--log-level",
@@ -89,15 +91,17 @@ Examples:
     return parser
 
 
-def display_text_nodes(text_nodes: List[TextNode], verbose: bool = False, max_nodes: Optional[int] = None) -> None:
+def display_text_nodes(
+    text_nodes: List[TextNode], verbose: bool = False, max_nodes: Optional[int] = None
+) -> None:
     """Display text nodes in a user-friendly format"""
     logger.info(f"\nGenerated {len(text_nodes)} TextNode(s):")
-    
+
     # Determine how many nodes to display
     display_count = len(text_nodes)
     if max_nodes is not None and max_nodes < display_count:
         display_count = max_nodes
-    
+
     for i, tn in enumerate(text_nodes[:display_count]):
         logger.info(f"\n--- TextNode {i + 1} ---")
         logger.info(f"ID: {tn.id_}")
@@ -125,7 +129,9 @@ def display_text_nodes(text_nodes: List[TextNode], verbose: bool = False, max_no
         logger.info(f"Relationships Summary: {rel_summary}")
 
     if display_count < len(text_nodes):
-        logger.info(f"\n... and {len(text_nodes) - display_count} more TextNode(s) not shown.")
+        logger.info(
+            f"\n... and {len(text_nodes) - display_count} more TextNode(s) not shown."
+        )
 
 
 def main():
@@ -144,32 +150,32 @@ def main():
         available_formats = get_supported_formats()
         logger.info("Available document formats (with current dependencies):")
         for fmt in DocumentFormat:
-            status = "✓ Available" if fmt in available_formats else "✗ Missing dependencies"
+            status = (
+                "✓ Available" if fmt in available_formats else "✗ Missing dependencies"
+            )
             logger.info(f"  - {fmt.value}: {status}")
         return 0
 
     # Process the document
     try:
         logger.info(f"Processing document: {args.source}")
-        
+
         # Handle format specification
         format_type = args.format
-        
+
         text_nodes = chunk_document_by_toc_to_text_nodes(
             source=args.source,
             is_url=args.url,
             format_type=format_type,
-            # Legacy flags for backward compatibility
-            is_markdown=args.markdown,
         )
-        
+
         # Display the generated nodes
         display_text_nodes(text_nodes, verbose=args.verbose, max_nodes=args.max_nodes)
-        
+
     except Exception as e:
         logger.error(f"Error processing document: {e}")
         return 1
-    
+
     return 0
 
 
