@@ -18,7 +18,9 @@ classifiers = [
 ]
 dependencies = [
     "beautifulsoup4>=4.13.4",
+    "docutils>=0.21.2",
     "llama-index-core>=0.12.36,<0.13",
+    "nbformat>=5.10.4",
     "pymupdf>=1.25.5",
     "python-docx>=1.1.2",
     "requests",

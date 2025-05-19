@@ -1,9 +1,7 @@
 import logging
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple
 
 from docx import Document
-from docx.document import Document as DocumentType
-from docx.text.paragraph import Paragraph
 
 from .document_chunking import BaseDocumentChunker, TOCNode
 
@@ -29,13 +27,13 @@ class DOCXTOCChunker(BaseDocumentChunker):
         self.paragraphs = []
         self._document_loaded = False
         self._heading_style_to_level = {
-            'Heading 1': 1,
-            'Heading 2': 2,
-            'Heading 3': 3,
-            'Heading 4': 4,
-            'Heading 5': 5,
-            'Heading 6': 6,
-            'Title': 0,
+            "Heading 1": 1,
+            "Heading 2": 2,
+            "Heading 3": 3,
+            "Heading 4": 4,
+            "Heading 5": 5,
+            "Heading 6": 6,
+            "Title": 0,
         }
 
     def load_document(self) -> None:
@@ -105,14 +103,14 @@ class DOCXTOCChunker(BaseDocumentChunker):
             List of tuples with (paragraph_index, heading_level, heading_title)
         """
         headings = []
-        
+
         for i, para in enumerate(self.paragraphs):
             if para.style.name in self._heading_style_to_level:
                 level = self._heading_style_to_level[para.style.name]
                 title = para.text.strip()
                 if title:  # Only include headings with text content
                     headings.append((i, level, title))
-        
+
         return headings
 
     def _find_parent_for_level(self, node: TOCNode, target_level: int) -> TOCNode:
@@ -171,7 +169,7 @@ class DOCXTOCChunker(BaseDocumentChunker):
             para = self.paragraphs[i]
             if para.text.strip():  # Only include non-empty paragraphs
                 content_paragraphs.append(para.text)
-        
+
         return "\n".join(content_paragraphs)
 
     def _extract_all_text(self) -> str:

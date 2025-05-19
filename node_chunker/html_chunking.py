@@ -1,7 +1,7 @@
 import logging
-import re
-from typing import List, Tuple, Optional, Dict
-from bs4 import BeautifulSoup, Tag, NavigableString
+from typing import List, Tuple
+
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 from .document_chunking import BaseDocumentChunker, TOCNode
 
@@ -30,7 +30,7 @@ class HTMLTOCChunker(BaseDocumentChunker):
     def load_document(self) -> None:
         """Load the HTML document and parse it with BeautifulSoup"""
         try:
-            self.soup = BeautifulSoup(self.html_content, 'html.parser')
+            self.soup = BeautifulSoup(self.html_content, "html.parser")
             self._document_loaded = True
         except Exception as e:
             logger.error(f"Error loading HTML: {e}")
@@ -86,16 +86,16 @@ class HTMLTOCChunker(BaseDocumentChunker):
             List of tuples with (heading_tag, header_level, header_title)
         """
         headers = []
-        heading_tags = self.soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-        
+        heading_tags = self.soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])
+
         for tag in heading_tags:
             # Get header level from tag name (h1 -> 1, h2 -> 2, etc.)
             level = int(tag.name[1])
             title = tag.get_text(strip=True)
-            
+
             if title:  # Only include headings with text content
                 headers.append((tag, level, title))
-                
+
         return headers
 
     def _find_parent_for_level(self, node: TOCNode, target_level: int) -> TOCNode:
@@ -131,8 +131,12 @@ class HTMLTOCChunker(BaseDocumentChunker):
         # Fallback to root node if no appropriate parent is found
         return self.root_node
 
-    def _extract_section_content(self, current_heading: Tag, all_headings: List[Tuple[Tag, int, str]], 
-                                current_index: int) -> str:
+    def _extract_section_content(
+        self,
+        current_heading: Tag,
+        all_headings: List[Tuple[Tag, int, str]],
+        current_index: int,
+    ) -> str:
         """
         Extract content for a section between this heading and the next one.
 
@@ -145,53 +149,55 @@ class HTMLTOCChunker(BaseDocumentChunker):
             The extracted content as a string
         """
         content = []
-        
+
         # Add the heading itself to the content
         content.append(self._get_element_text(current_heading))
-        
+
         # Start with the element after the heading
         element = current_heading.next_sibling
-        
+
         # If there's another heading after this one
         next_heading = None
         if current_index < len(all_headings) - 1:
             next_heading = all_headings[current_index + 1][0]
-        
+
         # Collect all elements until we hit the next heading
         while element and element != next_heading:
             if isinstance(element, Tag):
                 # Skip if this element contains the next heading
-                if next_heading and element.find(next_heading.name, string=next_heading.get_text(strip=True)):
+                if next_heading and element.find(
+                    next_heading.name, string=next_heading.get_text(strip=True)
+                ):
                     element = element.next_sibling
                     continue
-                
+
                 # Skip nested headings of same or higher level
-                if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                if element.name in ["h1", "h2", "h3", "h4", "h5", "h6"]:
                     element_level = int(element.name[1])
                     current_level = int(current_heading.name[1])
                     if element_level <= current_level:
                         element = element.next_sibling
                         continue
-                
+
                 content.append(self._get_element_text(element))
             elif isinstance(element, NavigableString) and element.strip():
                 content.append(element.strip())
-            
+
             element = element.next_sibling
-            
+
         return "\n".join([c for c in content if c])
 
     def _get_element_text(self, element) -> str:
         """Extract clean text from an HTML element"""
         if isinstance(element, NavigableString):
             return element.strip()
-        
+
         # Get text from the tag, preserving some structural elements
-        if element.name in ['p', 'div', 'section', 'article']:
+        if element.name in ["p", "div", "section", "article"]:
             return element.get_text("\n", strip=True)
-        elif element.name in ['li', 'dt', 'dd']:
+        elif element.name in ["li", "dt", "dd"]:
             return "• " + element.get_text(strip=True)
-        elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+        elif element.name in ["h1", "h2", "h3", "h4", "h5", "h6"]:
             return element.get_text(strip=True)
         else:
             return element.get_text(" ", strip=True)
