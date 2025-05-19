@@ -9,6 +9,7 @@ from llama_index.core.schema import TextNode
 from node_chunker.md_chunking import MarkdownTOCChunker
 from node_chunker.pdf_chunking import PDFTOCChunker
 from node_chunker.html_chunking import HTMLTOCChunker
+from node_chunker.docx_chunking import DOCXTOCChunker
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
@@ -43,8 +44,39 @@ def download_pdf_from_url(url: str) -> str:
         raise
 
 
+def download_file_from_url(url: str, suffix: str = None) -> str:
+    """
+    Download a file from a URL and save it to a temporary file.
+
+    Args:
+        url: The URL of the file to download
+        suffix: Optional file extension with dot (e.g., ".docx", ".pdf")
+
+    Returns:
+        Path to the downloaded temporary file
+    """
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        # Create a temporary file with appropriate suffix
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        temp_path = temp_file.name
+
+        # Write the content to the temporary file
+        with open(temp_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        return temp_path
+    except Exception as e:
+        logger.error(f"Error downloading file from URL: {e}")
+        raise
+
+
 def chunk_document_by_toc_to_text_nodes(
-    source: str, is_url: bool = None, is_markdown: bool = False, is_html: bool = False
+    source: str, is_url: bool = None, is_markdown: bool = False, 
+    is_html: bool = False, is_docx: bool = False
 ) -> List[TextNode]:
     """
     Convenience function to create a TOC-based hierarchical chunking of a document
@@ -53,8 +85,9 @@ def chunk_document_by_toc_to_text_nodes(
     Args:
         source: Path to the document file or URL, or content text
         is_url: Force URL interpretation if True, file path if False, or auto-detect if None
-        is_markdown: Whether the source is markdown text (True) or a PDF/HTML file/URL (False)
-        is_html: Whether the source is HTML content (True) or a PDF/Markdown file/URL (False)
+        is_markdown: Whether the source is markdown text
+        is_html: Whether the source is HTML content
+        is_docx: Whether the source is a Word document
 
     Returns:
         A list of TextNode objects representing the document chunks.
@@ -64,6 +97,9 @@ def chunk_document_by_toc_to_text_nodes(
     source_name_for_metadata = source  # Original source name for metadata
 
     try:
+        if is_url is None:
+            is_url = source.startswith(("http://", "https://", "ftp://"))
+
         if is_markdown:
             # For markdown, source can be either a file path or the markdown text itself
             is_file_path = os.path.exists(source) and not is_url
@@ -102,11 +138,21 @@ def chunk_document_by_toc_to_text_nodes(
             with HTMLTOCChunker(html_content, source_name_for_metadata) as chunker:
                 chunker.build_toc_tree()
                 return chunker.get_text_nodes()
-        else:
-            # PDF handling
-            if is_url is None:
-                is_url = source.startswith(("http://", "https://", "ftp://"))
+        elif is_docx:
+            # Word document handling
+            if is_url:
+                logger.info(f"Downloading Word document from URL: {source}")
+                temp_file_path = download_file_from_url(source, suffix=".docx")
+                actual_source_path = temp_file_path
 
+            with DOCXTOCChunker(
+                docx_path=actual_source_path,
+                source_display_name=source_name_for_metadata,
+            ) as chunker:
+                chunker.build_toc_tree()
+                return chunker.get_text_nodes()
+        else:
+            # Default to PDF handling
             if is_url:
                 logger.info(f"Downloading PDF from URL: {source}")
                 temp_file_path = download_pdf_from_url(source)

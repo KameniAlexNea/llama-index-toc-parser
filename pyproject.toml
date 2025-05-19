@@ -20,6 +20,7 @@ dependencies = [
     "beautifulsoup4>=4.13.4",
     "llama-index-core>=0.12.36,<0.13",
     "pymupdf>=1.25.5",
+    "python-docx>=1.1.2",
     "requests",
 ]
 description = "A Python package for Document Node Chunking based on Table of Contents"
