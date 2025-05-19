@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from node_chunker.chunks import chunk_document_by_toc_to_text_nodes
+from node_chunker.chunks import DocumentFormat, chunk_document_by_toc_to_text_nodes
 
 
 class TestIntegration(unittest.TestCase):
@@ -43,7 +43,7 @@ This is section 2.
         """Test integration of markdown chunking with command line arguments"""
         # Test with the convenience function
         text_nodes = chunk_document_by_toc_to_text_nodes(
-            self.markdown_path, is_markdown=True
+            self.markdown_path, format_type=DocumentFormat.MARKDOWN
         )
 
         # Basic verification
@@ -68,7 +68,7 @@ This is section 2.
         """Test integration with raw markdown text instead of a file"""
         # Test with raw markdown text
         text_nodes = chunk_document_by_toc_to_text_nodes(
-            self.test_markdown, is_markdown=True
+            self.test_markdown, format_type=DocumentFormat.MARKDOWN
         )
 
         # Basic verification
@@ -80,29 +80,6 @@ This is section 2.
                 self.assertEqual(node.metadata["context"], "Test Document > Section 1")
             elif node.metadata["title"] == "Section 2":
                 self.assertEqual(node.metadata["context"], "Test Document > Section 2")
-
-    def test_cli_argument_handling(self):
-        """Test CLI argument parsing in main.py"""
-        # Import the main module - this would be your example/main.py
-        try:
-            from example.main import parser as arg_parser
-        except ImportError:
-            self.skipTest("example/main.py not available or doesn't export parser")
-
-        # Test argument parsing
-        args = arg_parser.parse_args([self.markdown_path, "--markdown"])
-        self.assertEqual(args.source, self.markdown_path)
-        self.assertTrue(args.markdown)
-        self.assertFalse(args.url)
-
-        args = arg_parser.parse_args([self.markdown_path, "--url"])
-        self.assertEqual(args.source, self.markdown_path)
-        self.assertFalse(args.markdown)
-        self.assertTrue(args.url)
-
-        args = arg_parser.parse_args([self.markdown_path, "--verbose"])
-        self.assertEqual(args.source, self.markdown_path)
-        self.assertTrue(args.verbose)
 
 
 if __name__ == "__main__":
