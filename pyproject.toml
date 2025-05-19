@@ -16,15 +16,6 @@ classifiers = [
     "Intended Audience :: Education",
     "Topic :: Education",
 ]
-dependencies = [
-    "beautifulsoup4>=4.13.4",
-    "docutils>=0.21.2",
-    "llama-index-core>=0.12.36,<0.13",
-    "nbformat>=5.10.4",
-    "pymupdf>=1.25.5",
-    "python-docx>=1.1.2",
-    "requests",
-]
 description = "A Python package for Document Node Chunking based on Table of Contents"
 keywords = [
     "LLM",
@@ -47,7 +38,30 @@ Homepage = "https://github.com/KameniAlexNea/llama-index-toc-parser"
 Repository = "https://github.com/KameniAlexNea/llama-index-toc-parser"
 "Bug Tracker" = "https://github.com/KameniAlexNea/llama-index-toc-parser/issues"
 
+# Base dependencies that are always needed
+dependencies = [
+    "llama-index-core>=0.12.36,<0.13",
+    "requests",
+]
+
 [project.optional-dependencies]
+# Format-specific dependencies
+pdf = ["pymupdf>=1.25.5"]
+docx = ["python-docx>=1.1.2"]
+html = ["beautifulsoup4>=4.13.4"]
+jupyter = ["nbformat>=5.10.4"]
+rst = ["docutils>=0.21.2"]
+
+# Combination dependencies
+all = [
+    "pymupdf>=1.25.5",
+    "python-docx>=1.1.2",
+    "beautifulsoup4>=4.13.4",
+    "nbformat>=5.10.4",
+    "docutils>=0.21.2",
+]
+
+# Testing and development dependencies
 test = [
     "coverage>=5.0", # For unittest coverage
 ]
