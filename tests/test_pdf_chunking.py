@@ -36,7 +36,7 @@ class TestPDFChunking(unittest.TestCase):
         mock_pages = []
         for i in range(3):
             mock_page = MagicMock()
-            mock_page.get_text.return_value = f"Content of page {i+1}"
+            mock_page.get_text.return_value = f"Content of page {i + 1}"
             mock_pages.append(mock_page)
 
         mock_doc.load_page.side_effect = mock_pages
@@ -81,7 +81,7 @@ class TestPDFChunking(unittest.TestCase):
         # Mock page content
         def mock_load_page(page_num):
             mock_page = MagicMock()
-            mock_page.get_text.return_value = f"Content of page {page_num+1}"
+            mock_page.get_text.return_value = f"Content of page {page_num + 1}"
             return mock_page
 
         mock_doc.load_page.side_effect = mock_load_page
@@ -132,7 +132,7 @@ class TestPDFChunking(unittest.TestCase):
         # Mock page content
         def mock_load_page(page_num):
             mock_page = MagicMock()
-            mock_page.get_text.return_value = f"Content of page {page_num+1}"
+            mock_page.get_text.return_value = f"Content of page {page_num + 1}"
             return mock_page
 
         mock_doc.load_page.side_effect = mock_load_page
@@ -184,7 +184,7 @@ class TestPDFChunking(unittest.TestCase):
         # Mock page content
         def mock_load_page(page_num):
             mock_page = MagicMock()
-            mock_page.get_text.return_value = f"Content of page {page_num+1}"
+            mock_page.get_text.return_value = f"Content of page {page_num + 1}"
             return mock_page
 
         mock_doc.load_page.side_effect = mock_load_page

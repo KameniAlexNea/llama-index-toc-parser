@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     logger.info(f"\nGenerated {len(text_nodes)} TextNode(s):")
     for i, tn in enumerate(text_nodes):
-        logger.info(f"\n--- TextNode {i+1} ---")
+        logger.info(f"\n--- TextNode {i + 1} ---")
         logger.info(f"ID: {tn.id_}")
 
         if args.verbose:
@@ -101,5 +101,5 @@ if __name__ == "__main__":
         if (
             i >= 4 and len(text_nodes) > 5 and not args.verbose
         ):  # Print first few and stop if too many
-            logger.info(f"\n... and {len(text_nodes) - (i+1)} more TextNode(s).")
+            logger.info(f"\n... and {len(text_nodes) - (i + 1)} more TextNode(s).")
             break

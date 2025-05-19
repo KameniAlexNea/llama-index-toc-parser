@@ -63,7 +63,6 @@ def chunk_document_by_toc_to_text_nodes(
 
     try:
         if is_markdown:
-
             # For markdown, source can be either a file path or the markdown text itself
             is_file_path = os.path.exists(source) and not is_url
 
