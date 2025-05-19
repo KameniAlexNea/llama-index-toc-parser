@@ -2,6 +2,7 @@ import importlib.util
 import logging
 import os
 import tempfile
+from enum import Enum
 from typing import List, Optional, Set, Union
 
 import requests
@@ -10,17 +11,34 @@ from llama_index.core.schema import TextNode
 # Get logger for this module
 logger = logging.getLogger(__name__)
 
-# Define document type constants
-PDF = "pdf"
-DOCX = "docx"
-HTML = "html"
-MARKDOWN = "md"
-JUPYTER = "jupyter"
-RST = "rst"
-ALL = "all"
+# Define document format enum
+class DocumentFormat(str, Enum):
+    PDF = "pdf"
+    DOCX = "docx"
+    HTML = "html"
+    MARKDOWN = "md"
+    JUPYTER = "jupyter"
+    RST = "rst"
+    
+    @classmethod
+    def from_extension(cls, filename: str) -> Optional["DocumentFormat"]:
+        """Determine format from file extension"""
+        if filename.lower().endswith(".pdf"):
+            return cls.PDF
+        elif filename.lower().endswith((".docx", ".doc")):
+            return cls.DOCX
+        elif filename.lower().endswith((".html", ".htm")):
+            return cls.HTML
+        elif filename.lower().endswith((".md", ".markdown")):
+            return cls.MARKDOWN
+        elif filename.lower().endswith(".ipynb"):
+            return cls.JUPYTER
+        elif filename.lower().endswith(".rst"):
+            return cls.RST
+        return None
 
 
-def _check_format_supported(format_type: str) -> bool:
+def _check_format_supported(format_type: DocumentFormat) -> bool:
     """
     Check if the required dependencies for a specific format are installed.
 
@@ -30,23 +48,23 @@ def _check_format_supported(format_type: str) -> bool:
     Returns:
         True if dependencies are available, False otherwise
     """
-    if format_type == PDF:
+    if format_type == DocumentFormat.PDF:
         return importlib.util.find_spec("fitz") is not None
-    elif format_type == DOCX:
+    elif format_type == DocumentFormat.DOCX:
         return importlib.util.find_spec("docx") is not None
-    elif format_type == HTML:
+    elif format_type == DocumentFormat.HTML:
         return importlib.util.find_spec("bs4") is not None
-    elif format_type == MARKDOWN:
+    elif format_type == DocumentFormat.MARKDOWN:
         return True  # Markdown has no special dependencies
-    elif format_type == JUPYTER:
+    elif format_type == DocumentFormat.JUPYTER:
         return importlib.util.find_spec("nbformat") is not None
-    elif format_type == RST:
+    elif format_type == DocumentFormat.RST:
         return importlib.util.find_spec("docutils") is not None
     else:
         return False
 
 
-def get_supported_formats() -> Set[str]:
+def get_supported_formats() -> Set[DocumentFormat]:
     """
     Get all currently supported document formats based on installed dependencies.
 
@@ -54,39 +72,10 @@ def get_supported_formats() -> Set[str]:
         Set of supported format identifiers
     """
     supported = set()
-    for format_type in [PDF, DOCX, HTML, MARKDOWN, JUPYTER, RST]:
+    for format_type in DocumentFormat:
         if _check_format_supported(format_type):
             supported.add(format_type)
     return supported
-
-
-def download_pdf_from_url(url: str) -> str:
-    """
-    Download a PDF from a URL and save it to a temporary file.
-
-    Args:
-        url: The URL of the PDF to download
-
-    Returns:
-        Path to the downloaded temporary file
-    """
-    try:
-        response = requests.get(url, stream=True)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-
-        # Create a temporary file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        temp_path = temp_file.name
-
-        # Write the content to the temporary file
-        with open(temp_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-
-        return temp_path
-    except Exception as e:
-        logger.error(f"Error downloading PDF from URL: {e}")
-        raise
 
 
 def download_file_from_url(url: str, suffix: str = None) -> str:
@@ -119,7 +108,7 @@ def download_file_from_url(url: str, suffix: str = None) -> str:
         raise
 
 
-def _import_chunker_class(format_type: str):
+def _import_chunker_class(format_type: DocumentFormat):
     """
     Dynamically import a chunker class based on format type.
 
@@ -130,29 +119,23 @@ def _import_chunker_class(format_type: str):
         The chunker class, or None if not available
     """
     try:
-        if format_type == PDF:
+        if format_type == DocumentFormat.PDF:
             from node_chunker.pdf_chunking import PDFTOCChunker
-
             return PDFTOCChunker
-        elif format_type == DOCX:
+        elif format_type == DocumentFormat.DOCX:
             from node_chunker.docx_chunking import DOCXTOCChunker
-
             return DOCXTOCChunker
-        elif format_type == HTML:
+        elif format_type == DocumentFormat.HTML:
             from node_chunker.html_chunking import HTMLTOCChunker
-
             return HTMLTOCChunker
-        elif format_type == MARKDOWN:
+        elif format_type == DocumentFormat.MARKDOWN:
             from node_chunker.md_chunking import MarkdownTOCChunker
-
             return MarkdownTOCChunker
-        elif format_type == JUPYTER:
+        elif format_type == DocumentFormat.JUPYTER:
             from node_chunker.jupyter_chunking import JupyterNotebookTOCChunker
-
             return JupyterNotebookTOCChunker
-        elif format_type == RST:
+        elif format_type == DocumentFormat.RST:
             from node_chunker.rst_chunking import RSTTOCChunker
-
             return RSTTOCChunker
     except ImportError as e:
         logger.warning(f"Failed to import chunker for {format_type}: {e}")
@@ -162,82 +145,60 @@ def _import_chunker_class(format_type: str):
 def chunk_document_by_toc_to_text_nodes(
     source: str,
     is_url: bool = None,
+    format_type: Optional[Union[DocumentFormat, str]] = None,
+    # Deprecated parameters - kept for backward compatibility
     is_markdown: bool = False,
     is_html: bool = False,
     is_docx: bool = False,
     is_jupyter: bool = False,
     is_rst: bool = False,
-    format_type: Optional[str] = None,
-    supported_formats: Union[str, List[str]] = ALL,
+    supported_formats: Union[str, List[str]] = None,  # Deprecated
 ) -> List[TextNode]:
     """
-    Convenience function to create a TOC-based hierarchical chunking of a document
-    and return it as a list of LlamaIndex TextNode objects.
+    Create a TOC-based hierarchical chunking of a document and return TextNode objects.
 
     Args:
         source: Path to the document file or URL, or content text
         is_url: Force URL interpretation if True, file path if False, or auto-detect if None
-        is_markdown: Whether the source is markdown text
-        is_html: Whether the source is HTML content
-        is_docx: Whether the source is a Word document
-        is_jupyter: Whether the source is a Jupyter notebook
-        is_rst: Whether the source is a reStructuredText document
-        format_type: Explicitly specify the format type (overrides boolean flags)
-        supported_formats: Which formats to support, either 'all' or a list like ['pdf', 'md']
+        format_type: Document format to use (PDF by default if not specified)
+        
+        # Deprecated parameters - kept for backward compatibility
+        is_markdown, is_html, is_docx, is_jupyter, is_rst: Boolean flags (deprecated)
+        supported_formats: Deprecated and ignored
 
     Returns:
         A list of TextNode objects representing the document chunks.
     """
-    # Determine which formats to support
-    if supported_formats == ALL:
-        enabled_formats = get_supported_formats()
-    else:
-        if isinstance(supported_formats, str):
-            supported_formats = [supported_formats]
-        enabled_formats = {
-            fmt for fmt in supported_formats if _check_format_supported(fmt)
-        }
-        if not enabled_formats:
-            raise ValueError(
-                f"None of the specified formats {supported_formats} are supported. "
-                f"Make sure required dependencies are installed."
-            )
-
-    # Convert legacy boolean flags to format_type if not explicitly provided
+    # Legacy parameter handling: convert boolean flags to format_type if necessary
     if format_type is None:
         if is_markdown:
-            format_type = MARKDOWN
+            format_type = DocumentFormat.MARKDOWN
         elif is_html:
-            format_type = HTML
+            format_type = DocumentFormat.HTML
         elif is_docx:
-            format_type = DOCX
+            format_type = DocumentFormat.DOCX
         elif is_jupyter:
-            format_type = JUPYTER
+            format_type = DocumentFormat.JUPYTER
         elif is_rst:
-            format_type = RST
+            format_type = DocumentFormat.RST
         else:
             # Try to auto-detect format from file extension
-            if source.lower().endswith(".pdf"):
-                format_type = PDF
-            elif source.lower().endswith((".docx", ".doc")):
-                format_type = DOCX
-            elif source.lower().endswith((".html", ".htm")):
-                format_type = HTML
-            elif source.lower().endswith((".md", ".markdown")):
-                format_type = MARKDOWN
-            elif source.lower().endswith(".ipynb"):
-                format_type = JUPYTER
-            elif source.lower().endswith(".rst"):
-                format_type = RST
-            else:
-                # Default to PDF for backward compatibility
-                format_type = PDF
+            detected_format = DocumentFormat.from_extension(source)
+            format_type = detected_format if detected_format else DocumentFormat.PDF
 
-    # Check if the format is supported and enabled
-    if format_type not in enabled_formats:
+    # Ensure format_type is a DocumentFormat enum
+    if isinstance(format_type, str):
+        try:
+            format_type = DocumentFormat(format_type)
+        except ValueError:
+            raise ValueError(f"Unknown format type: {format_type}")
+
+    # Check if the format is supported
+    if not _check_format_supported(format_type):
+        available = get_supported_formats()
         raise ValueError(
-            f"Format {format_type} is not enabled or dependencies not installed. "
-            f"Available formats: {enabled_formats}"
+            f"Format {format_type} is not supported (missing dependencies). "
+            f"Available formats: {available}"
         )
 
     temp_file_path = None
@@ -249,7 +210,7 @@ def chunk_document_by_toc_to_text_nodes(
             is_url = source.startswith(("http://", "https://", "ftp://"))
 
         # Handle specific formats
-        if format_type == MARKDOWN:
+        if format_type == DocumentFormat.MARKDOWN:
             # For markdown, source can be either a file path or the markdown text itself
             is_file_path = os.path.exists(source) and not is_url
 
@@ -262,12 +223,12 @@ def chunk_document_by_toc_to_text_nodes(
                 markdown_text = source
                 source_name_for_metadata = "markdown_text"  # Default name
 
-            MarkdownTOCChunker = _import_chunker_class(MARKDOWN)
+            MarkdownTOCChunker = _import_chunker_class(DocumentFormat.MARKDOWN)
             with MarkdownTOCChunker(markdown_text, source_name_for_metadata) as chunker:
                 chunker.build_toc_tree()
                 return chunker.get_text_nodes()
 
-        elif format_type == HTML:
+        elif format_type == DocumentFormat.HTML:
             # HTML handling
             is_file_path = os.path.exists(source) and not is_url
 
@@ -286,19 +247,19 @@ def chunk_document_by_toc_to_text_nodes(
                 html_content = source
                 source_name_for_metadata = "html_content"  # Default name
 
-            HTMLTOCChunker = _import_chunker_class(HTML)
+            HTMLTOCChunker = _import_chunker_class(DocumentFormat.HTML)
             with HTMLTOCChunker(html_content, source_name_for_metadata) as chunker:
                 chunker.build_toc_tree()
                 return chunker.get_text_nodes()
 
-        elif format_type == DOCX:
+        elif format_type == DocumentFormat.DOCX:
             # Word document handling
             if is_url:
                 logger.info(f"Downloading Word document from URL: {source}")
                 temp_file_path = download_file_from_url(source, suffix=".docx")
                 actual_source_path = temp_file_path
 
-            DOCXTOCChunker = _import_chunker_class(DOCX)
+            DOCXTOCChunker = _import_chunker_class(DocumentFormat.DOCX)
             with DOCXTOCChunker(
                 docx_path=actual_source_path,
                 source_display_name=source_name_for_metadata,
@@ -306,14 +267,14 @@ def chunk_document_by_toc_to_text_nodes(
                 chunker.build_toc_tree()
                 return chunker.get_text_nodes()
 
-        elif format_type == JUPYTER:
+        elif format_type == DocumentFormat.JUPYTER:
             # Jupyter notebook handling
             if is_url:
                 logger.info(f"Downloading Jupyter notebook from URL: {source}")
                 temp_file_path = download_file_from_url(source, suffix=".ipynb")
                 actual_source_path = temp_file_path
 
-            JupyterNotebookTOCChunker = _import_chunker_class(JUPYTER)
+            JupyterNotebookTOCChunker = _import_chunker_class(DocumentFormat.JUPYTER)
             with JupyterNotebookTOCChunker(
                 notebook_path=actual_source_path,
                 source_display_name=source_name_for_metadata,
@@ -321,7 +282,7 @@ def chunk_document_by_toc_to_text_nodes(
                 chunker.build_toc_tree()
                 return chunker.get_text_nodes()
 
-        elif format_type == RST:
+        elif format_type == DocumentFormat.RST:
             # reStructuredText handling
             is_file_path = os.path.exists(source) and not is_url
 
@@ -340,25 +301,28 @@ def chunk_document_by_toc_to_text_nodes(
                 rst_content = source
                 source_name_for_metadata = "rst_content"  # Default name
 
-            RSTTOCChunker = _import_chunker_class(RST)
+            RSTTOCChunker = _import_chunker_class(DocumentFormat.RST)
             with RSTTOCChunker(rst_content, source_name_for_metadata) as chunker:
                 chunker.build_toc_tree()
                 return chunker.get_text_nodes()
 
-        elif format_type == PDF:
-            # Default to PDF handling
+        elif format_type == DocumentFormat.PDF:
+            # PDF handling
             if is_url:
                 logger.info(f"Downloading PDF from URL: {source}")
-                temp_file_path = download_pdf_from_url(source)
+                temp_file_path = download_file_from_url(source, suffix=".pdf")
                 actual_source_path = temp_file_path
 
-            PDFTOCChunker = _import_chunker_class(PDF)
+            PDFTOCChunker = _import_chunker_class(DocumentFormat.PDF)
             with PDFTOCChunker(
                 pdf_path=actual_source_path,
                 source_display_name=source_name_for_metadata,
             ) as chunker:
                 chunker.build_toc_tree()
                 return chunker.get_text_nodes()
+        
+        else:
+            raise ValueError(f"Unsupported format type: {format_type}")
 
     finally:
         if temp_file_path and os.path.exists(temp_file_path):

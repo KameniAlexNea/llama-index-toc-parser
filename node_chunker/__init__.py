@@ -9,25 +9,13 @@ logging.basicConfig(
 logger = logging.getLogger("node_chunker")
 
 from node_chunker.chunks import (
-    ALL,
-    DOCX,
-    HTML,
-    JUPYTER,
-    MARKDOWN,
-    PDF,
-    RST,
+    DocumentFormat,
     chunk_document_by_toc_to_text_nodes,
     get_supported_formats,
 )
 
 __all__ = [
-    "ALL",
-    "DOCX",
-    "HTML",
-    "JUPYTER",
-    "MARKDOWN",
-    "PDF",
-    "RST",
+    "DocumentFormat",
     "chunk_document_by_toc_to_text_nodes",
     "get_supported_formats",
 ]
