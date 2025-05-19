@@ -3,7 +3,7 @@ import unittest
 
 from llama_index.core.schema import NodeRelationship
 
-from node_chunker.markdown_chunking import MarkdownTOCChunker
+from node_chunker.md_chunking import MarkdownTOCChunker
 
 
 class TestMarkdownChunking(unittest.TestCase):

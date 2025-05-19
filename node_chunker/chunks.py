@@ -6,7 +6,7 @@ from typing import List
 import requests
 from llama_index.core.schema import TextNode
 
-from node_chunker.markdown_chunking import MarkdownTOCChunker
+from node_chunker.md_chunking import MarkdownTOCChunker
 from node_chunker.pdf_chunking import PDFTOCChunker
 from node_chunker.html_chunking import HTMLTOCChunker
 
