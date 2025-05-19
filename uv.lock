@@ -947,7 +947,7 @@ name = "importlib-metadata"
 version = "8.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp", marker = "python_full_version < '3.12'" },
+    { name = "zipp" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/66/650a33bd90f786193e4de4b3ad86ea60b53c89b669a5c7be931fac31cdb0/importlib_metadata-8.7.0.tar.gz", hash = "sha256:d13b81ad223b890aa16c5471f2ac3056cf76c5f10f82d6f9292f0b415f389000", size = 56641 }
 wheels = [
@@ -1539,19 +1539,21 @@ wheels = [
 
 [[package]]
 name = "node-chunker"
-version = "0.0.1"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "beautifulsoup4" },
-    { name = "docutils" },
     { name = "llama-index-core" },
-    { name = "nbformat" },
-    { name = "pymupdf" },
-    { name = "python-docx" },
     { name = "requests" },
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "beautifulsoup4" },
+    { name = "docutils" },
+    { name = "nbformat" },
+    { name = "pymupdf" },
+    { name = "python-docx" },
+]
 dev = [
     { name = "black" },
     { name = "build" },
@@ -1569,27 +1571,47 @@ dev = [
     { name = "twine" },
     { name = "wheel" },
 ]
+docx = [
+    { name = "python-docx" },
+]
+html = [
+    { name = "beautifulsoup4" },
+]
+jupyter = [
+    { name = "nbformat" },
+]
+pdf = [
+    { name = "pymupdf" },
+]
+rst = [
+    { name = "docutils" },
+]
 test = [
     { name = "coverage" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "beautifulsoup4", specifier = ">=4.13.4" },
+    { name = "beautifulsoup4", marker = "extra == 'all'", specifier = ">=4.13.4" },
+    { name = "beautifulsoup4", marker = "extra == 'html'", specifier = ">=4.13.4" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0,<25.0" },
     { name = "build", marker = "extra == 'dev'" },
     { name = "codespell", marker = "extra == 'dev'", specifier = ">=2.2.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=5.0" },
-    { name = "docutils", specifier = ">=0.21.2" },
+    { name = "docutils", marker = "extra == 'all'", specifier = ">=0.21.2" },
+    { name = "docutils", marker = "extra == 'rst'", specifier = ">=0.21.2" },
     { name = "llama-index-core", specifier = ">=0.12.36,<0.13" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
-    { name = "nbformat", specifier = ">=5.10.4" },
+    { name = "nbformat", marker = "extra == 'all'", specifier = ">=5.10.4" },
+    { name = "nbformat", marker = "extra == 'jupyter'", specifier = ">=5.10.4" },
     { name = "pickleshare", marker = "extra == 'dev'" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=2.15,<4.0" },
-    { name = "pymupdf", specifier = ">=1.25.5" },
-    { name = "python-docx", specifier = ">=1.1.2" },
+    { name = "pymupdf", marker = "extra == 'all'", specifier = ">=1.25.5" },
+    { name = "pymupdf", marker = "extra == 'pdf'", specifier = ">=1.25.5" },
+    { name = "python-docx", marker = "extra == 'all'", specifier = ">=1.1.2" },
+    { name = "python-docx", marker = "extra == 'docx'", specifier = ">=1.1.2" },
     { name = "requests" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "safety", marker = "extra == 'dev'" },
@@ -1598,7 +1620,7 @@ requires-dist = [
     { name = "twine", marker = "extra == 'dev'" },
     { name = "wheel", marker = "extra == 'dev'" },
 ]
-provides-extras = ["test", "dev"]
+provides-extras = ["pdf", "docx", "html", "jupyter", "rst", "all", "test", "dev"]
 
 [[package]]
 name = "nodeenv"

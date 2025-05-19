@@ -31,18 +31,18 @@ license = {text = "MIT"}
 name = "node-chunker"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
-version = "0.0.1"
-
-[project.urls]
-Homepage = "https://github.com/KameniAlexNea/llama-index-toc-parser"
-Repository = "https://github.com/KameniAlexNea/llama-index-toc-parser"
-"Bug Tracker" = "https://github.com/KameniAlexNea/llama-index-toc-parser/issues"
+version = "0.1.0"
 
 # Base dependencies that are always needed
 dependencies = [
     "llama-index-core>=0.12.36,<0.13",
     "requests",
 ]
+
+[project.urls]
+Homepage = "https://github.com/KameniAlexNea/llama-index-toc-parser"
+Repository = "https://github.com/KameniAlexNea/llama-index-toc-parser"
+"Bug Tracker" = "https://github.com/KameniAlexNea/llama-index-toc-parser/issues"
 
 [project.optional-dependencies]
 # Format-specific dependencies

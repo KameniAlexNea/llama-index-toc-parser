@@ -23,23 +23,33 @@ The `node_chunker` package provides tools to intelligently split documents into 
 
 ## Installation
 
-### Basic Installation
+The package name is `node-chunker` and will soon be available on PyPI.
+
+### GitHub Installation
 
 ```bash
-pip install git+git@github.com:KameniAlexNea/llama-index-toc-parser.git
+pip install git+https://github.com/KameniAlexNea/llama-index-toc-parser.git@main
+```
+
+### Coming Soon: PyPI Installation
+
+Once available on PyPI, you'll be able to install with:
+
+```bash
+pip install node-chunker
 ```
 
 ### Install with Specific Format Support
 
 ```bash
 # Install only PDF and Markdown support
-pip install "git+git@github.com:KameniAlexNea/llama-index-toc-parser.git#egg=node-chunker[pdf,md]"
+pip install "node-chunker[pdf,md]"
 
 # Install HTML and Word document support
-pip install "git+git@github.com:KameniAlexNea/llama-index-toc-parser.git#egg=node-chunker[html,docx]"
+pip install "node-chunker[html,docx]"
 
 # Install all format support
-pip install "git+git@github.com:KameniAlexNea/llama-index-toc-parser.git#egg=node-chunker[all]"
+pip install "node-chunker[all]"
 ```
 
 ## Usage
@@ -48,68 +58,76 @@ pip install "git+git@github.com:KameniAlexNea/llama-index-toc-parser.git#egg=nod
 
 ```python
 from node_chunker.chunks import chunk_document_by_toc_to_text_nodes
+from node_chunker.chunks import DocumentFormat
 
-# Process a PDF document
+# Process a PDF document (auto-detected by file extension)
 pdf_nodes = chunk_document_by_toc_to_text_nodes("path/to/document.pdf")
 
 # Process a Markdown document
 markdown_nodes = chunk_document_by_toc_to_text_nodes(
-    "path/to/document.md", is_markdown=True
+    "path/to/document.md", 
+    format_type=DocumentFormat.MARKDOWN
 )
 
 # Process an HTML document
 html_nodes = chunk_document_by_toc_to_text_nodes(
-    "path/to/document.html", is_html=True
+    "path/to/document.html", 
+    format_type=DocumentFormat.HTML
 )
 
 # Process a Word document
 docx_nodes = chunk_document_by_toc_to_text_nodes(
-    "path/to/document.docx", is_docx=True
+    "path/to/document.docx", 
+    format_type=DocumentFormat.DOCX
 )
 
 # Process a Jupyter notebook
 jupyter_nodes = chunk_document_by_toc_to_text_nodes(
-    "path/to/notebook.ipynb", is_jupyter=True
+    "path/to/notebook.ipynb", 
+    format_type=DocumentFormat.JUPYTER
 )
 
 # Process a reStructuredText document
 rst_nodes = chunk_document_by_toc_to_text_nodes(
-    "path/to/document.rst", is_rst=True
+    "path/to/document.rst", 
+    format_type=DocumentFormat.RST
 )
 
 # Process a PDF from a URL
 url_nodes = chunk_document_by_toc_to_text_nodes(
-    "https://example.com/document.pdf", is_url=True
+    "https://example.com/document.pdf", 
+    is_url=True
 )
 
 # Process raw markdown text
 markdown_text = "# Title\nContent\n## Section\nMore content"
 text_nodes = chunk_document_by_toc_to_text_nodes(
-    markdown_text, is_markdown=True
+    markdown_text, 
+    format_type=DocumentFormat.MARKDOWN
 )
 ```
 
 ### Format Selection
 
-You can explicitly specify which document format to use and which formats to enable:
+You can explicitly specify which document format to use:
 
 ```python
-from node_chunker.chunks import chunk_document_by_toc_to_text_nodes, PDF, MARKDOWN, HTML, ALL
+from node_chunker.chunks import chunk_document_by_toc_to_text_nodes, DocumentFormat
 
-# Auto-detect format but only enable PDF and Markdown support
-nodes = chunk_document_by_toc_to_text_nodes(
-    "document.pdf", 
-    supported_formats=[PDF, MARKDOWN]
-)
-
-# Explicitly specify format
+# Use the DocumentFormat enum to specify format
 nodes = chunk_document_by_toc_to_text_nodes(
     "content.txt",  # Content that's actually markdown
-    format_type=MARKDOWN
+    format_type=DocumentFormat.MARKDOWN
+)
+
+# You can also use strings to specify the format
+nodes = chunk_document_by_toc_to_text_nodes(
+    "content.txt",
+    format_type="md"
 )
 
 # Check which formats are available with your current dependencies
-from node_chunker import get_supported_formats
+from node_chunker.chunks import get_supported_formats
 available_formats = get_supported_formats()
 print(f"Available formats: {available_formats}")
 ```
