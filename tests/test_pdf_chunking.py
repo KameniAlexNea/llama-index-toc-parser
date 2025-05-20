@@ -27,28 +27,42 @@ class TestPDFChunking(unittest.TestCase):
     @patch("fitz.open")
     def test_no_toc_pdf(self, mock_open):
         """Test chunking a PDF with no table of contents"""
-        # Mock PyMuPDF behavior for a PDF with no TOC
         mock_doc = MagicMock()
         mock_doc.get_toc.return_value = []
         mock_doc.page_count = 3
 
-        # Mock page content
-        mock_pages = []
-        for i in range(3):
-            mock_page = MagicMock()
-            mock_page.get_text.return_value = f"Content of page {i + 1}"
-            mock_pages.append(mock_page)
+        mock_pages_list = []
+        for i in range(mock_doc.page_count):
+            mock_page_obj = MagicMock(name=f"Page_{i}")
+            
+            # Define the side_effect function for this specific page's get_text
+            def create_get_text_side_effect(page_idx_closure):
+                def get_text_side_effect_impl(*args, **kwargs):
+                    page_content_text = f"Content of page {page_idx_closure + 1}"
+                    if args and args[0] == "dict":
+                        return {
+                            "blocks": [{
+                                "type": 0, "bbox": [10, 10, 500, 100], # Example bbox
+                                "lines": [{"spans": [{"text": page_content_text}]}]
+                            }],
+                            "width": 600, "height": 800 # Example page dimensions
+                        }
+                    else:
+                        # This branch is hit by the loop in build_toc_tree for no-TOC case
+                        return page_content_text 
+                return get_text_side_effect_impl
 
-        mock_doc.load_page.side_effect = mock_pages
+            mock_page_obj.get_text.side_effect = create_get_text_side_effect(i)
+            mock_pages_list.append(mock_page_obj)
+
+        mock_doc.load_page.side_effect = lambda page_idx: mock_pages_list[page_idx]
         mock_open.return_value = mock_doc
 
-        # Create the chunker with our mocked PDF
         chunker = PDFTOCChunker(
             pdf_path=self.temp_pdf_path, source_display_name="test_no_toc.pdf"
         )
         text_nodes = chunker.get_text_nodes()
 
-        # Should be one node with the entire document content
         self.assertEqual(len(text_nodes), 1)
         self.assertEqual(text_nodes[0].metadata["title"], "Document Root")
         self.assertEqual(text_nodes[0].metadata["level"], 0)
@@ -57,17 +71,14 @@ class TestPDFChunking(unittest.TestCase):
 
         # Check content includes all pages
         expected_content = "Content of page 1\nContent of page 2\nContent of page 3\n"
-        self.assertEqual(text_nodes[0].text, expected_content)
+        self.assertEqual(text_nodes[0].text.strip(), expected_content.strip())
+
 
     @patch("fitz.open")
     def test_hierarchical_pdf(self, mock_open):
         """Test chunking a PDF with a hierarchical TOC structure"""
-        # Mock PyMuPDF behavior for a PDF with hierarchical TOC
         mock_doc = MagicMock()
         mock_doc.page_count = 10
-
-        # Create a mock TOC structure
-        # PyMuPDF TOC format: [level, title, page, ...]
         mock_toc = [
             [1, "Chapter 1", 1],
             [2, "Section 1.1", 2],
@@ -78,16 +89,43 @@ class TestPDFChunking(unittest.TestCase):
         ]
         mock_doc.get_toc.return_value = mock_toc
 
-        # Mock page content
-        def mock_load_page(page_num):
-            mock_page = MagicMock()
-            mock_page.get_text.return_value = f"Content of page {page_num + 1}"
-            return mock_page
+        mock_pages_list = []
+        for i in range(mock_doc.page_count):
+            mock_page_obj = MagicMock(name=f"Page_{i}")
+            titles_on_this_page_i = [item[1] for item in mock_toc if item[2] - 1 == i]
 
-        mock_doc.load_page.side_effect = mock_load_page
+            def create_get_text_side_effect(page_idx_closure, titles_on_page_closure):
+                def get_text_side_effect_impl(*args, **kwargs):
+                    page_text_for_content = f"Content of page {page_idx_closure + 1}"
+                    if titles_on_page_closure:
+                        page_text_for_content += " " + " ".join(titles_on_page_closure)
+                    
+                    if args and args[0] == "dict":
+                        blocks_for_dict = []
+                        y_val = 10.0
+                        # Add blocks for titles to be found by _find_heading_y_position
+                        for title_text in titles_on_page_closure:
+                            blocks_for_dict.append({
+                                "type": 0, "bbox": [10, y_val, 500, y_val + 10],
+                                "lines": [{"spans": [{"text": title_text}]}]
+                            })
+                            y_val += 20
+                        # Add a generic block for content extraction by _extract_content
+                        blocks_for_dict.append({
+                            "type": 0, "bbox": [10, y_val, 500, y_val + 100],
+                            "lines": [{"spans": [{"text": f"Some other text on page {page_idx_closure + 1}"}]}]
+                        })
+                        return {"blocks": blocks_for_dict, "width": 600, "height": 800}
+                    else:
+                        return page_text_for_content + "\n"
+                return get_text_side_effect_impl
+
+            mock_page_obj.get_text.side_effect = create_get_text_side_effect(i, titles_on_this_page_i)
+            mock_pages_list.append(mock_page_obj)
+        
+        mock_doc.load_page.side_effect = lambda page_idx: mock_pages_list[page_idx]
         mock_open.return_value = mock_doc
 
-        # Create the chunker with our mocked PDF
         chunker = PDFTOCChunker(
             pdf_path=self.temp_pdf_path, source_display_name="test_hierarchy.pdf"
         )
@@ -121,24 +159,46 @@ class TestPDFChunking(unittest.TestCase):
     @patch("fitz.open")
     def test_relationships(self, mock_open):
         """Test that node relationships are correctly established in PDF chunks"""
-        # Mock PyMuPDF behavior
         mock_doc = MagicMock()
         mock_doc.page_count = 5
-
-        # Create a simple TOC structure
         mock_toc = [[1, "Chapter 1", 1], [2, "Section 1.1", 2], [1, "Chapter 2", 3]]
         mock_doc.get_toc.return_value = mock_toc
 
-        # Mock page content
-        def mock_load_page(page_num):
-            mock_page = MagicMock()
-            mock_page.get_text.return_value = f"Content of page {page_num + 1}"
-            return mock_page
+        mock_pages_list = []
+        for i in range(mock_doc.page_count):
+            mock_page_obj = MagicMock(name=f"Page_{i}")
+            titles_on_this_page_i = [item[1] for item in mock_toc if item[2] - 1 == i]
 
-        mock_doc.load_page.side_effect = mock_load_page
+            def create_get_text_side_effect(page_idx_closure, titles_on_page_closure):
+                def get_text_side_effect_impl(*args, **kwargs):
+                    page_text_for_content = f"Content of page {page_idx_closure + 1}"
+                    if titles_on_page_closure:
+                        page_text_for_content += " " + " ".join(titles_on_page_closure)
+
+                    if args and args[0] == "dict":
+                        blocks_for_dict = []
+                        y_val = 10.0
+                        for title_text in titles_on_page_closure:
+                            blocks_for_dict.append({
+                                "type": 0, "bbox": [10, y_val, 500, y_val + 10],
+                                "lines": [{"spans": [{"text": title_text}]}]
+                            })
+                            y_val += 20
+                        blocks_for_dict.append({
+                            "type": 0, "bbox": [10, y_val, 500, y_val + 100],
+                            "lines": [{"spans": [{"text": f"Some other text on page {page_idx_closure + 1}"}]}]
+                        })
+                        return {"blocks": blocks_for_dict, "width": 600, "height": 800}
+                    else:
+                        return page_text_for_content + "\n"
+                return get_text_side_effect_impl
+            
+            mock_page_obj.get_text.side_effect = create_get_text_side_effect(i, titles_on_this_page_i)
+            mock_pages_list.append(mock_page_obj)
+
+        mock_doc.load_page.side_effect = lambda page_idx: mock_pages_list[page_idx]
         mock_open.return_value = mock_doc
 
-        # Create the chunker
         chunker = PDFTOCChunker(
             pdf_path=self.temp_pdf_path, source_display_name="test_relationships.pdf"
         )
@@ -170,27 +230,54 @@ class TestPDFChunking(unittest.TestCase):
     @patch("fitz.open")
     def test_page_extraction(self, mock_open):
         """Test that page content is correctly extracted for each node"""
-        # Mock PyMuPDF behavior
         mock_doc = MagicMock()
         mock_doc.page_count = 5
-
-        # Create a TOC structure where sections span multiple pages
         mock_toc = [
-            [1, "Chapter 1", 1],  # spans pages 1-2
-            [1, "Chapter 2", 3],  # spans pages 3-5
+            [1, "Chapter 1", 1],  # spans pages 1-2 (idx 0-1)
+            [1, "Chapter 2", 3],  # spans pages 3-5 (idx 2-4)
         ]
         mock_doc.get_toc.return_value = mock_toc
 
-        # Mock page content
-        def mock_load_page(page_num):
-            mock_page = MagicMock()
-            mock_page.get_text.return_value = f"Content of page {page_num + 1}"
-            return mock_page
+        mock_pages_list = []
+        for i in range(mock_doc.page_count):
+            mock_page_obj = MagicMock(name=f"Page_{i}")
+            titles_on_this_page_i = [item[1] for item in mock_toc if item[2] - 1 == i]
 
-        mock_doc.load_page.side_effect = mock_load_page
+            def create_get_text_side_effect(page_idx_closure, titles_on_page_closure):
+                def get_text_side_effect_impl(*args, **kwargs):
+                    # For _extract_content, we need to provide the basic page content.
+                    # The titles themselves are usually part of this content.
+                    page_text_for_content = f"Content of page {page_idx_closure + 1}"
+                    # If a title is on this page, _find_heading_y_position needs to find it.
+                    # _extract_content will then grab text around it.
+                    
+                    if args and args[0] == "dict":
+                        blocks_for_dict = []
+                        y_val = 10.0 
+                        # Simulate titles for _find_heading_y_position
+                        for title_text in titles_on_page_closure:
+                            blocks_for_dict.append({
+                                "type": 0, "bbox": [10, y_val, 500, y_val + 10], # y for title
+                                "lines": [{"spans": [{"text": title_text}]}]
+                            })
+                            y_val += 20
+                        # Simulate main content for _extract_content
+                        blocks_for_dict.append({
+                            "type": 0, "bbox": [10, y_val, 500, y_val + 100], # y for main content
+                            "lines": [{"spans": [{"text": f"Content of page {page_idx_closure + 1}"}]}]
+                        })
+                        return {"blocks": blocks_for_dict, "width": 600, "height": 800}
+                    else:
+                        # Fallback, though _extract_content uses "dict"
+                        return f"Content of page {page_idx_closure + 1}\n" 
+                return get_text_side_effect_impl
+
+            mock_page_obj.get_text.side_effect = create_get_text_side_effect(i, titles_on_this_page_i)
+            mock_pages_list.append(mock_page_obj)
+
+        mock_doc.load_page.side_effect = lambda page_idx: mock_pages_list[page_idx]
         mock_open.return_value = mock_doc
 
-        # Create the chunker
         chunker = PDFTOCChunker(
             pdf_path=self.temp_pdf_path, source_display_name="test_extraction.pdf"
         )
@@ -212,9 +299,11 @@ class TestPDFChunking(unittest.TestCase):
         self.assertEqual(chapter2.metadata["page_label"], "3-5")
 
         # Check content extraction
-        self.assertEqual(chapter1.text, "Content of page 1\nContent of page 2\n")
+        # The mock for get_text("dict",...) returns "Content of page X" as one of the blocks.
+        # _extract_content joins these.
+        self.assertEqual(chapter1.text.strip(), "Chapter 1\nContent of page 1\nContent of page 2")
         self.assertEqual(
-            chapter2.text, "Content of page 3\nContent of page 4\nContent of page 5\n"
+            chapter2.text.strip(), "Chapter 2\nContent of page 3\nContent of page 4\nContent of page 5"
         )
 
     def test_integration(self):
@@ -225,12 +314,12 @@ class TestPDFChunking(unittest.TestCase):
             self.skipTest("No test PDF available - skipping integration test")
 
         # Test using convenience function
-        from node_chunker.document_chunking import (
+        from node_chunker.chunks import (
             chunk_document_by_toc_to_text_nodes,
         )
 
         text_nodes = chunk_document_by_toc_to_text_nodes(
-            test_pdf_path, is_markdown=False
+            test_pdf_path,
         )
 
         # Basic verification that we got some nodes
