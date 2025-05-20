@@ -22,6 +22,7 @@ class TOCNode(BaseModel):
     children: List["TOCNode"] = Field(default_factory=list)
     content: str = ""
     end_page: Optional[int] = None
+    y_position: Optional[float] = None  # y-coordinate of the heading on its page_num
 
     class Config:
         arbitrary_types_allowed = True
