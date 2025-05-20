@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 import fitz  # PyMuPDF
 
@@ -6,6 +7,9 @@ from .document_chunking import BaseDocumentChunker, TOCNode
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
+TEXT_EXTRACTION_FLAGS = (
+    fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_LIGATURES & ~fitz.TEXT_PRESERVE_IMAGES
+)
 
 
 class PDFTOCChunker(BaseDocumentChunker):
@@ -25,6 +29,9 @@ class PDFTOCChunker(BaseDocumentChunker):
         self.doc = None
         self.toc = None
         self._document_loaded = False
+        self.root_node.y_position = (
+            0.0  # Document root conceptually starts at y=0 on page 0
+        )
 
     def load_document(self) -> None:
         """Load the PDF document and extract its TOC"""
@@ -66,6 +73,36 @@ class PDFTOCChunker(BaseDocumentChunker):
 
         return self.root_node
 
+    def _find_heading_y_position(self, page: fitz.Page, title: str) -> float:
+        """
+        Find the y-coordinate of a heading on a page.
+        Returns the y-coordinate (bbox[1]) or 0.0 if not found (fallback to top of page).
+        """
+        # Clean the title from TOC for matching
+        clean_title_toc = (
+            "".join(c for c in title if c.isalnum() or c.isspace()).strip().lower()
+        )
+        if not clean_title_toc:  # Avoid issues with empty or whitespace-only titles
+            return 0.0
+
+        blocks = page.get_text(
+            "dict",
+            flags=TEXT_EXTRACTION_FLAGS,
+        )["blocks"]
+        for block in blocks:
+            if block.get("type") == 0:  # Text block
+                for line in block.get("lines", []):
+                    line_text = "".join(span["text"] for span in line.get("spans", []))
+                    # Clean the line text from PDF for matching
+                    clean_line_text = (
+                        "".join(c for c in line_text if c.isalnum() or c.isspace())
+                        .strip()
+                        .lower()
+                    )
+                    if clean_title_toc in clean_line_text:
+                        return block["bbox"][1]  # y0 of the block
+        return 0.0  # Fallback if title not found on page
+
     def _process_outline(self, toc_items, parent_node: TOCNode, level=1):
         """
         Process TOC items into our node tree.
@@ -95,8 +132,14 @@ class PDFTOCChunker(BaseDocumentChunker):
 
                 # Only process items that match our current tree level
                 if current_item_level_from_toc == level:
+                    page_obj = self.doc.load_page(page_num)
+                    y_pos = self._find_heading_y_position(page_obj, title)
                     node = TOCNode(
-                        title=title, page_num=page_num, level=level, parent=parent_node
+                        title=title,
+                        page_num=page_num,
+                        level=level,
+                        parent=parent_node,
+                        y_position=y_pos,
                     )
                     parent_node.add_child(node)
                     processed_indices.add(i)
@@ -132,17 +175,17 @@ class PDFTOCChunker(BaseDocumentChunker):
             node: The current node to process
 
         Returns:
-            The end page of this node
+            The end page of this node (overall span)
         """
+        # Determine node's overall end page (span)
         if not node.children:
-            # Leaf node
-            next_section_start_page = self.doc.page_count  # Default if no next sibling
-
+            # Leaf node: end_page is determined by the next sibling's start or document end
+            next_section_start_page = self.doc.page_count
             if node.parent:
                 siblings = node.parent.children
                 try:
                     idx = siblings.index(node)
-                    if idx < len(siblings) - 1:  # If there is a next sibling
+                    if idx < len(siblings) - 1:
                         next_section_start_page = siblings[idx + 1].page_num
                 except ValueError:
                     pass  # Should not typically occur
@@ -151,62 +194,153 @@ class PDFTOCChunker(BaseDocumentChunker):
             node.end_page = max(
                 node.page_num, min(calculated_end_page, self.doc.page_count - 1)
             )
+        else:
+            # Non-leaf node: end_page is determined by the end_page of its last child
+            last_child_end_page = -1
+            for child in node.children:
+                child_end_page = self._set_end_pages_and_content(
+                    child
+                )  # Recursive call
+                last_child_end_page = max(last_child_end_page, child_end_page)
+            node.end_page = max(
+                node.page_num,
+                last_child_end_page if last_child_end_page != -1 else node.page_num,
+            )
 
-            node.content = self._extract_content(node.page_num, node.end_page)
-            return node.end_page
+        # Extract content for the current node
+        current_node_start_y = node.y_position if node.y_position is not None else 0.0
 
-        # Non-leaf node
-        last_child_end_page = -1
-        for child_idx, child in enumerate(node.children):
-            child_end_page = self._set_end_pages_and_content(child)
-            last_child_end_page = max(last_child_end_page, child_end_page)
+        content_end_page_idx: int
+        content_end_y_on_final_page: Optional[float] = None
 
-        # A non-leaf node's content ends where its first child begins (if text exists before it)
-        # Its overall span (end_page) is determined by its last child's end_page.
-        node.end_page = (
-            last_child_end_page if last_child_end_page != -1 else node.page_num
-        )
-
-        # Content for non-leaf node: text from its start page up to the page before its first child starts.
-        # Or, if it has no children with content or all children start on same page, its own content might be empty.
         if node.children:
-            first_child_page = node.children[0].page_num
-            # Ensure there are pages between node.page_num and first_child_page
-            if first_child_page > node.page_num:
-                node.content = self._extract_content(
-                    node.page_num, first_child_page - 1
-                )
-            # First child starts on the same page or earlier (error), so no preceding content for parent
-            else:
-                node.content = ""
-        elif (
-            not node.content
-        ):  # If it's a leaf node that somehow didn't get content above
-            node.content = self._extract_content(node.page_num, node.end_page)
+            first_child = node.children[0]
+            if first_child.page_num > node.page_num:
+                # Parent's content ends on the page before the first child's page
+                content_end_page_idx = first_child.page_num - 1
+                # content_end_y_on_final_page remains None (full page content for these pages)
+            else:  # first_child.page_num == node.page_num
+                # Parent's content ends on the same page, just before the first child's y_position
+                content_end_page_idx = node.page_num
+                content_end_y_on_final_page = first_child.y_position
+        else:  # Leaf node
+            content_end_page_idx = node.end_page  # Use the pre-calculated span end_page
+            # If the next sibling is on this content_end_page_idx, use its y_position
+            if node.parent:
+                siblings = node.parent.children
+                try:
+                    idx = siblings.index(node)
+                    if idx < len(siblings) - 1:
+                        next_sibling = siblings[idx + 1]
+                        if next_sibling.page_num == content_end_page_idx:
+                            # Check if next_sibling.y_position is not None before assigning
+                            if next_sibling.y_position is not None:
+                                content_end_y_on_final_page = next_sibling.y_position
+                except ValueError:
+                    pass
+
+        # Ensure content_end_page_idx is valid
+        actual_content_end_page = max(node.page_num, content_end_page_idx)
+        actual_content_end_page = min(actual_content_end_page, self.doc.page_count - 1)
+
+        if node.page_num > actual_content_end_page:
+            node.content = ""  # No pages for content (e.g. title-only node before child on same page)
+        else:
+            node.content = self._extract_content(
+                node.page_num,
+                actual_content_end_page,
+                start_y_on_first_page=current_node_start_y,
+                end_y_on_final_page=content_end_y_on_final_page,
+            )
+
+        # Fallback for nodes that might have been missed or are special (e.g. root with no TOC)
+        if node.title == "Document Root" and not self.toc and not node.content:
+            node.content = self._extract_content(0, self.doc.page_count - 1)
 
         # If a non-leaf node has no specific content of its own (e.g. "Document Root" or a chapter title page)
         # and its end_page was not updated by children, ensure it's at least its own start page.
+        # This part might be redundant now given the above logic, but kept for safety.
         if node.end_page is None or node.end_page < node.page_num:
             node.end_page = node.page_num
-            if (
-                not node.content
-            ):  # If it has no children and no content, extract for its single page
-                node.content = self._extract_content(node.page_num, node.end_page)
+            if not node.content and not node.children:
+                node.content = self._extract_content(
+                    node.page_num,
+                    node.end_page,
+                    start_y_on_first_page=current_node_start_y,
+                )
 
         return node.end_page
 
-    def _extract_content(self, start_page: int, end_page: int) -> str:
-        """Extract text content from a range of pages"""
-        content = ""
-        # Ensure start_page is not greater than end_page
-        if start_page > end_page:
-            return ""  # Or handle as an error/warning
+    def _extract_content(
+        self,
+        start_page_idx: int,
+        end_page_idx: int,
+        start_y_on_first_page: Optional[float] = None,
+        end_y_on_final_page: Optional[float] = None,
+    ) -> str:
+        """Extract text content from a range of pages, respecting y-boundaries on first/last page."""
+        content_parts = []
 
-        for page_idx in range(start_page, end_page + 1):
-            if 0 <= page_idx < self.doc.page_count:
-                page = self.doc.load_page(page_idx)
-                content += page.get_text() + "\n"
-        return content
+        # Ensure start_page is not greater than end_page
+        if start_page_idx > end_page_idx:
+            return ""
+
+        for page_num in range(start_page_idx, end_page_idx + 1):
+            if not (0 <= page_num < self.doc.page_count):
+                continue
+
+            page = self.doc.load_page(page_num)
+
+            # Determine y-boundaries for the current page
+            current_page_effective_start_y = (
+                start_y_on_first_page
+                if page_num == start_page_idx and start_y_on_first_page is not None
+                else 0.0
+            )
+            current_page_effective_end_y = (
+                end_y_on_final_page
+                if page_num == end_page_idx and end_y_on_final_page is not None
+                else float("inf")
+            )
+
+            # If start_y is greater or equal to end_y on the same page, no content can be extracted.
+            if current_page_effective_start_y >= current_page_effective_end_y:
+                continue
+
+            blocks = page.get_text(
+                "dict",
+                flags=TEXT_EXTRACTION_FLAGS,
+            )["blocks"]
+            page_content = []
+            for block in blocks:
+                if block.get("type") == 0:  # Text block
+                    block_y0 = block["bbox"][1]
+                    block_y1 = block["bbox"][3]  # Bottom of the block
+
+                    # Block is considered if it *starts* below start_y and *starts* before end_y.
+                    # More accurately: if any part of the block is within the [start_y, end_y) interval.
+                    # A common way: block_bottom > start_y AND block_top < end_y
+                    if (
+                        block_y1 > current_page_effective_start_y
+                        and block_y0 < current_page_effective_end_y
+                    ):
+                        block_text_parts = []
+                        for line in block.get("lines", []):
+                            # Check if line is within bounds if more granularity is needed (optional)
+                            # For now, if block is in, take all its lines.
+                            line_text = "".join(
+                                span["text"] for span in line.get("spans", [])
+                            )
+                            block_text_parts.append(line_text)
+                        if block_text_parts:
+                            page_content.append(
+                                " ".join(block_text_parts)
+                            )  # Join lines with space, then blocks with newline
+
+            if page_content:
+                content_parts.append("\n".join(page_content))
+
+        return "\n".join(content_parts).strip()
 
     def close(self) -> None:
         """Close the PDF file"""

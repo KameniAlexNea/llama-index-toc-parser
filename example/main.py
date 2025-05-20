@@ -32,18 +32,21 @@ def get_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python example/main.py --source document.pdf
-  python example/main.py --source document.md --format md
+  python example/main.py --source example/test_markdown.pdf
+  python example/main.py --source example/test_markdown.md --format md
   python example/main.py --source https://example.com/document.html --format html
   python example/main.py --source document.docx --format docx
   python example/main.py --source notebook.ipynb --format jupyter
-  python example/main.py --source document.rst --format rst
+  python example/main.py --source example/test_markdown.rst --format rst
   python example/main.py --source document --format pdf
         """,
     )
 
     parser.add_argument(
-        "--source", required=True, help="Path to file, URL, or raw text content"
+        "--source",
+        default="example/test_markdown.pdf",
+        required=False,
+        help="Path to file, URL, or raw text content",
     )
 
     # Format specification
