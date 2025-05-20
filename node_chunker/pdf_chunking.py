@@ -7,6 +7,9 @@ from .document_chunking import BaseDocumentChunker, TOCNode
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
+TEXT_EXTRACTION_FLAGS = (
+    fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_LIGATURES & ~fitz.TEXT_PRESERVE_IMAGES
+)
 
 
 class PDFTOCChunker(BaseDocumentChunker):
@@ -84,9 +87,7 @@ class PDFTOCChunker(BaseDocumentChunker):
 
         blocks = page.get_text(
             "dict",
-            flags=fitz.TEXTFLAGS_DICT
-            & ~fitz.TEXT_PRESERVE_LIGATURES
-            & ~fitz.TEXT_PRESERVE_IMAGES,
+            flags=TEXT_EXTRACTION_FLAGS,
         )["blocks"]
         for block in blocks:
             if block.get("type") == 0:  # Text block
@@ -308,9 +309,7 @@ class PDFTOCChunker(BaseDocumentChunker):
 
             blocks = page.get_text(
                 "dict",
-                flags=fitz.TEXTFLAGS_DICT
-                & ~fitz.TEXT_PRESERVE_LIGATURES
-                & ~fitz.TEXT_PRESERVE_IMAGES,
+                flags=TEXT_EXTRACTION_FLAGS,
             )["blocks"]
             page_content = []
             for block in blocks:
