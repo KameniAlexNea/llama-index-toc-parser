@@ -1,7 +1,8 @@
 import logging
+from typing import Optional
 
 import fitz  # PyMuPDF
-from typing import Optional
+
 from .document_chunking import BaseDocumentChunker, TOCNode
 
 # Get logger for this module
@@ -25,7 +26,9 @@ class PDFTOCChunker(BaseDocumentChunker):
         self.doc = None
         self.toc = None
         self._document_loaded = False
-        self.root_node.y_position = 0.0  # Document root conceptually starts at y=0 on page 0
+        self.root_node.y_position = (
+            0.0  # Document root conceptually starts at y=0 on page 0
+        )
 
     def load_document(self) -> None:
         """Load the PDF document and extract its TOC"""
@@ -73,21 +76,28 @@ class PDFTOCChunker(BaseDocumentChunker):
         Returns the y-coordinate (bbox[1]) or 0.0 if not found (fallback to top of page).
         """
         # Clean the title from TOC for matching
-        clean_title_toc = "".join(
-            c for c in title if c.isalnum() or c.isspace()
-        ).strip().lower()
+        clean_title_toc = (
+            "".join(c for c in title if c.isalnum() or c.isspace()).strip().lower()
+        )
         if not clean_title_toc:  # Avoid issues with empty or whitespace-only titles
             return 0.0
 
-        blocks = page.get_text("dict", flags=fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_LIGATURES & ~fitz.TEXT_PRESERVE_IMAGES)["blocks"]
+        blocks = page.get_text(
+            "dict",
+            flags=fitz.TEXTFLAGS_DICT
+            & ~fitz.TEXT_PRESERVE_LIGATURES
+            & ~fitz.TEXT_PRESERVE_IMAGES,
+        )["blocks"]
         for block in blocks:
             if block.get("type") == 0:  # Text block
                 for line in block.get("lines", []):
                     line_text = "".join(span["text"] for span in line.get("spans", []))
                     # Clean the line text from PDF for matching
-                    clean_line_text = "".join(
-                        c for c in line_text if c.isalnum() or c.isspace()
-                    ).strip().lower()
+                    clean_line_text = (
+                        "".join(c for c in line_text if c.isalnum() or c.isspace())
+                        .strip()
+                        .lower()
+                    )
                     if clean_title_toc in clean_line_text:
                         return block["bbox"][1]  # y0 of the block
         return 0.0  # Fallback if title not found on page
@@ -187,9 +197,14 @@ class PDFTOCChunker(BaseDocumentChunker):
             # Non-leaf node: end_page is determined by the end_page of its last child
             last_child_end_page = -1
             for child in node.children:
-                child_end_page = self._set_end_pages_and_content(child)  # Recursive call
+                child_end_page = self._set_end_pages_and_content(
+                    child
+                )  # Recursive call
                 last_child_end_page = max(last_child_end_page, child_end_page)
-            node.end_page = max(node.page_num, last_child_end_page if last_child_end_page != -1 else node.page_num)
+            node.end_page = max(
+                node.page_num,
+                last_child_end_page if last_child_end_page != -1 else node.page_num,
+            )
 
         # Extract content for the current node
         current_node_start_y = node.y_position if node.y_position is not None else 0.0
@@ -217,7 +232,7 @@ class PDFTOCChunker(BaseDocumentChunker):
                     if idx < len(siblings) - 1:
                         next_sibling = siblings[idx + 1]
                         if next_sibling.page_num == content_end_page_idx:
-                             # Check if next_sibling.y_position is not None before assigning
+                            # Check if next_sibling.y_position is not None before assigning
                             if next_sibling.y_position is not None:
                                 content_end_y_on_final_page = next_sibling.y_position
                 except ValueError:
@@ -234,13 +249,12 @@ class PDFTOCChunker(BaseDocumentChunker):
                 node.page_num,
                 actual_content_end_page,
                 start_y_on_first_page=current_node_start_y,
-                end_y_on_final_page=content_end_y_on_final_page
+                end_y_on_final_page=content_end_y_on_final_page,
             )
 
         # Fallback for nodes that might have been missed or are special (e.g. root with no TOC)
         if node.title == "Document Root" and not self.toc and not node.content:
-             node.content = self._extract_content(0, self.doc.page_count - 1)
-
+            node.content = self._extract_content(0, self.doc.page_count - 1)
 
         # If a non-leaf node has no specific content of its own (e.g. "Document Root" or a chapter title page)
         # and its end_page was not updated by children, ensure it's at least its own start page.
@@ -248,7 +262,11 @@ class PDFTOCChunker(BaseDocumentChunker):
         if node.end_page is None or node.end_page < node.page_num:
             node.end_page = node.page_num
             if not node.content and not node.children:
-                node.content = self._extract_content(node.page_num, node.end_page, start_y_on_first_page=current_node_start_y)
+                node.content = self._extract_content(
+                    node.page_num,
+                    node.end_page,
+                    start_y_on_first_page=current_node_start_y,
+                )
 
         return node.end_page
 
@@ -273,14 +291,27 @@ class PDFTOCChunker(BaseDocumentChunker):
             page = self.doc.load_page(page_num)
 
             # Determine y-boundaries for the current page
-            current_page_effective_start_y = start_y_on_first_page if page_num == start_page_idx and start_y_on_first_page is not None else 0.0
-            current_page_effective_end_y = end_y_on_final_page if page_num == end_page_idx and end_y_on_final_page is not None else float('inf')
+            current_page_effective_start_y = (
+                start_y_on_first_page
+                if page_num == start_page_idx and start_y_on_first_page is not None
+                else 0.0
+            )
+            current_page_effective_end_y = (
+                end_y_on_final_page
+                if page_num == end_page_idx and end_y_on_final_page is not None
+                else float("inf")
+            )
 
             # If start_y is greater or equal to end_y on the same page, no content can be extracted.
             if current_page_effective_start_y >= current_page_effective_end_y:
                 continue
 
-            blocks = page.get_text("dict", flags=fitz.TEXTFLAGS_DICT & ~fitz.TEXT_PRESERVE_LIGATURES & ~fitz.TEXT_PRESERVE_IMAGES)["blocks"]
+            blocks = page.get_text(
+                "dict",
+                flags=fitz.TEXTFLAGS_DICT
+                & ~fitz.TEXT_PRESERVE_LIGATURES
+                & ~fitz.TEXT_PRESERVE_IMAGES,
+            )["blocks"]
             page_content = []
             for block in blocks:
                 if block.get("type") == 0:  # Text block
@@ -290,15 +321,22 @@ class PDFTOCChunker(BaseDocumentChunker):
                     # Block is considered if it *starts* below start_y and *starts* before end_y.
                     # More accurately: if any part of the block is within the [start_y, end_y) interval.
                     # A common way: block_bottom > start_y AND block_top < end_y
-                    if block_y1 > current_page_effective_start_y and block_y0 < current_page_effective_end_y:
+                    if (
+                        block_y1 > current_page_effective_start_y
+                        and block_y0 < current_page_effective_end_y
+                    ):
                         block_text_parts = []
                         for line in block.get("lines", []):
                             # Check if line is within bounds if more granularity is needed (optional)
                             # For now, if block is in, take all its lines.
-                            line_text = "".join(span["text"] for span in line.get("spans", []))
+                            line_text = "".join(
+                                span["text"] for span in line.get("spans", [])
+                            )
                             block_text_parts.append(line_text)
                         if block_text_parts:
-                             page_content.append(" ".join(block_text_parts)) # Join lines with space, then blocks with newline
+                            page_content.append(
+                                " ".join(block_text_parts)
+                            )  # Join lines with space, then blocks with newline
 
             if page_content:
                 content_parts.append("\n".join(page_content))

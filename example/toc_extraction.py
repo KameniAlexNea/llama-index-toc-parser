@@ -1,5 +1,6 @@
 import fitz  # PyMuPDF
 
+
 def extract_pdf_sections_by_headings(pdf_path):
     doc = fitz.open(pdf_path)
     toc = doc.get_toc()
@@ -19,29 +20,23 @@ def extract_pdf_sections_by_headings(pdf_path):
                 line_text = " ".join(span["text"] for span in line["spans"])
                 if title.strip().lower() in line_text.strip().lower():
                     bbox = block["bbox"]
-                    section_markers.append({
-                        "title": title,
-                        "page": page_index,
-                        "y": bbox[1]
-                    })
+                    section_markers.append(
+                        {"title": title, "page": page_index, "y": bbox[1]}
+                    )
                     found = True
                     break
             if found:
                 break
         if not found:
             # Fallback: assume top of page if heading not detected
-            section_markers.append({
-                "title": title,
-                "page": page_index,
-                "y": 0
-            })
+            section_markers.append({"title": title, "page": page_index, "y": 0})
 
     # Sort section markers by page then y
     section_markers.sort(key=lambda x: (x["page"], x["y"]))
     sections = {}
 
     # Handle all pairs
-    for curr, next_ in zip(section_markers, section_markers[1:]):
+    for curr, next_ in zip(section_markers, section_markers[1:], strict=False):
         sections[curr["title"]] = extract_section_content(doc, curr, next_)
 
     # Handle last section — from its position to the end of the doc
@@ -73,7 +68,11 @@ def extract_section_content(doc, curr, next_):
             if page_num == end_page and end_y is not None and y >= end_y:
                 continue
 
-            text = "".join(span["text"] for line in block.get("lines", []) for span in line["spans"])
+            text = "".join(
+                span["text"]
+                for line in block.get("lines", [])
+                for span in line["spans"]
+            )
             content += text + "\n"
 
     return content.strip()

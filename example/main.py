@@ -43,7 +43,10 @@ Examples:
     )
 
     parser.add_argument(
-        "--source", default="example/test_markdown.pdf", required=False, help="Path to file, URL, or raw text content"
+        "--source",
+        default="example/test_markdown.pdf",
+        required=False,
+        help="Path to file, URL, or raw text content",
     )
 
     # Format specification

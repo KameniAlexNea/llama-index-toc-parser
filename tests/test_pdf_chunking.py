@@ -34,22 +34,27 @@ class TestPDFChunking(unittest.TestCase):
         mock_pages_list = []
         for i in range(mock_doc.page_count):
             mock_page_obj = MagicMock(name=f"Page_{i}")
-            
+
             # Define the side_effect function for this specific page's get_text
             def create_get_text_side_effect(page_idx_closure):
                 def get_text_side_effect_impl(*args, **kwargs):
                     page_content_text = f"Content of page {page_idx_closure + 1}"
                     if args and args[0] == "dict":
                         return {
-                            "blocks": [{
-                                "type": 0, "bbox": [10, 10, 500, 100], # Example bbox
-                                "lines": [{"spans": [{"text": page_content_text}]}]
-                            }],
-                            "width": 600, "height": 800 # Example page dimensions
+                            "blocks": [
+                                {
+                                    "type": 0,
+                                    "bbox": [10, 10, 500, 100],  # Example bbox
+                                    "lines": [{"spans": [{"text": page_content_text}]}],
+                                }
+                            ],
+                            "width": 600,
+                            "height": 800,  # Example page dimensions
                         }
                     else:
                         # This branch is hit by the loop in build_toc_tree for no-TOC case
-                        return page_content_text 
+                        return page_content_text
+
                 return get_text_side_effect_impl
 
             mock_page_obj.get_text.side_effect = create_get_text_side_effect(i)
@@ -72,7 +77,6 @@ class TestPDFChunking(unittest.TestCase):
         # Check content includes all pages
         expected_content = "Content of page 1\nContent of page 2\nContent of page 3\n"
         self.assertEqual(text_nodes[0].text.strip(), expected_content.strip())
-
 
     @patch("fitz.open")
     def test_hierarchical_pdf(self, mock_open):
@@ -99,30 +103,47 @@ class TestPDFChunking(unittest.TestCase):
                     page_text_for_content = f"Content of page {page_idx_closure + 1}"
                     if titles_on_page_closure:
                         page_text_for_content += " " + " ".join(titles_on_page_closure)
-                    
+
                     if args and args[0] == "dict":
                         blocks_for_dict = []
                         y_val = 10.0
                         # Add blocks for titles to be found by _find_heading_y_position
                         for title_text in titles_on_page_closure:
-                            blocks_for_dict.append({
-                                "type": 0, "bbox": [10, y_val, 500, y_val + 10],
-                                "lines": [{"spans": [{"text": title_text}]}]
-                            })
+                            blocks_for_dict.append(
+                                {
+                                    "type": 0,
+                                    "bbox": [10, y_val, 500, y_val + 10],
+                                    "lines": [{"spans": [{"text": title_text}]}],
+                                }
+                            )
                             y_val += 20
                         # Add a generic block for content extraction by _extract_content
-                        blocks_for_dict.append({
-                            "type": 0, "bbox": [10, y_val, 500, y_val + 100],
-                            "lines": [{"spans": [{"text": f"Some other text on page {page_idx_closure + 1}"}]}]
-                        })
+                        blocks_for_dict.append(
+                            {
+                                "type": 0,
+                                "bbox": [10, y_val, 500, y_val + 100],
+                                "lines": [
+                                    {
+                                        "spans": [
+                                            {
+                                                "text": f"Some other text on page {page_idx_closure + 1}"
+                                            }
+                                        ]
+                                    }
+                                ],
+                            }
+                        )
                         return {"blocks": blocks_for_dict, "width": 600, "height": 800}
                     else:
                         return page_text_for_content + "\n"
+
                 return get_text_side_effect_impl
 
-            mock_page_obj.get_text.side_effect = create_get_text_side_effect(i, titles_on_this_page_i)
+            mock_page_obj.get_text.side_effect = create_get_text_side_effect(
+                i, titles_on_this_page_i
+            )
             mock_pages_list.append(mock_page_obj)
-        
+
         mock_doc.load_page.side_effect = lambda page_idx: mock_pages_list[page_idx]
         mock_open.return_value = mock_doc
 
@@ -179,21 +200,38 @@ class TestPDFChunking(unittest.TestCase):
                         blocks_for_dict = []
                         y_val = 10.0
                         for title_text in titles_on_page_closure:
-                            blocks_for_dict.append({
-                                "type": 0, "bbox": [10, y_val, 500, y_val + 10],
-                                "lines": [{"spans": [{"text": title_text}]}]
-                            })
+                            blocks_for_dict.append(
+                                {
+                                    "type": 0,
+                                    "bbox": [10, y_val, 500, y_val + 10],
+                                    "lines": [{"spans": [{"text": title_text}]}],
+                                }
+                            )
                             y_val += 20
-                        blocks_for_dict.append({
-                            "type": 0, "bbox": [10, y_val, 500, y_val + 100],
-                            "lines": [{"spans": [{"text": f"Some other text on page {page_idx_closure + 1}"}]}]
-                        })
+                        blocks_for_dict.append(
+                            {
+                                "type": 0,
+                                "bbox": [10, y_val, 500, y_val + 100],
+                                "lines": [
+                                    {
+                                        "spans": [
+                                            {
+                                                "text": f"Some other text on page {page_idx_closure + 1}"
+                                            }
+                                        ]
+                                    }
+                                ],
+                            }
+                        )
                         return {"blocks": blocks_for_dict, "width": 600, "height": 800}
                     else:
                         return page_text_for_content + "\n"
+
                 return get_text_side_effect_impl
-            
-            mock_page_obj.get_text.side_effect = create_get_text_side_effect(i, titles_on_this_page_i)
+
+            mock_page_obj.get_text.side_effect = create_get_text_side_effect(
+                i, titles_on_this_page_i
+            )
             mock_pages_list.append(mock_page_obj)
 
         mock_doc.load_page.side_effect = lambda page_idx: mock_pages_list[page_idx]
@@ -250,29 +288,51 @@ class TestPDFChunking(unittest.TestCase):
                     page_text_for_content = f"Content of page {page_idx_closure + 1}"
                     # If a title is on this page, _find_heading_y_position needs to find it.
                     # _extract_content will then grab text around it.
-                    
+
                     if args and args[0] == "dict":
                         blocks_for_dict = []
-                        y_val = 10.0 
+                        y_val = 10.0
                         # Simulate titles for _find_heading_y_position
                         for title_text in titles_on_page_closure:
-                            blocks_for_dict.append({
-                                "type": 0, "bbox": [10, y_val, 500, y_val + 10], # y for title
-                                "lines": [{"spans": [{"text": title_text}]}]
-                            })
+                            blocks_for_dict.append(
+                                {
+                                    "type": 0,
+                                    "bbox": [10, y_val, 500, y_val + 10],  # y for title
+                                    "lines": [{"spans": [{"text": title_text}]}],
+                                }
+                            )
                             y_val += 20
                         # Simulate main content for _extract_content
-                        blocks_for_dict.append({
-                            "type": 0, "bbox": [10, y_val, 500, y_val + 100], # y for main content
-                            "lines": [{"spans": [{"text": f"Content of page {page_idx_closure + 1}"}]}]
-                        })
+                        blocks_for_dict.append(
+                            {
+                                "type": 0,
+                                "bbox": [
+                                    10,
+                                    y_val,
+                                    500,
+                                    y_val + 100,
+                                ],  # y for main content
+                                "lines": [
+                                    {
+                                        "spans": [
+                                            {
+                                                "text": f"Content of page {page_idx_closure + 1}"
+                                            }
+                                        ]
+                                    }
+                                ],
+                            }
+                        )
                         return {"blocks": blocks_for_dict, "width": 600, "height": 800}
                     else:
                         # Fallback, though _extract_content uses "dict"
-                        return f"Content of page {page_idx_closure + 1}\n" 
+                        return f"Content of page {page_idx_closure + 1}\n"
+
                 return get_text_side_effect_impl
 
-            mock_page_obj.get_text.side_effect = create_get_text_side_effect(i, titles_on_this_page_i)
+            mock_page_obj.get_text.side_effect = create_get_text_side_effect(
+                i, titles_on_this_page_i
+            )
             mock_pages_list.append(mock_page_obj)
 
         mock_doc.load_page.side_effect = lambda page_idx: mock_pages_list[page_idx]
@@ -301,9 +361,12 @@ class TestPDFChunking(unittest.TestCase):
         # Check content extraction
         # The mock for get_text("dict",...) returns "Content of page X" as one of the blocks.
         # _extract_content joins these.
-        self.assertEqual(chapter1.text.strip(), "Chapter 1\nContent of page 1\nContent of page 2")
         self.assertEqual(
-            chapter2.text.strip(), "Chapter 2\nContent of page 3\nContent of page 4\nContent of page 5"
+            chapter1.text.strip(), "Chapter 1\nContent of page 1\nContent of page 2"
+        )
+        self.assertEqual(
+            chapter2.text.strip(),
+            "Chapter 2\nContent of page 3\nContent of page 4\nContent of page 5",
         )
 
     def test_integration(self):
