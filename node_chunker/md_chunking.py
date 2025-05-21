@@ -25,6 +25,7 @@ class MarkdownTOCChunker(BaseDocumentChunker):
         self.markdown_text = markdown_text
         self.lines = []
         self._document_loaded = False
+        self._process_code_blocks()
 
     def load_document(self) -> None:
         """Load the markdown document and split into lines"""
@@ -54,7 +55,8 @@ class MarkdownTOCChunker(BaseDocumentChunker):
 
         if not headers:
             # No headers found, treat the entire document as one chunk
-            self.root_node.content = self.markdown_text
+            # Use original text with code blocks intact
+            self.root_node.content = getattr(self, 'original_text', self.markdown_text)
             self.root_node.end_page = 0  # Only one page for markdown
             return self.root_node
 
@@ -80,7 +82,9 @@ class MarkdownTOCChunker(BaseDocumentChunker):
                 end_line = headers[i + 1][0]  # Line number of next header
 
             # Extract content for this section
-            node.content = self._extract_content(start_line, end_line)
+            content_slice = self._extract_content(start_line, end_line)
+            # Restore code blocks in extracted content
+            node.content = self._restore_code_blocks(content_slice)
             node.end_page = 0  # Markdown is treated as a single page
 
         return self.root_node
@@ -172,6 +176,30 @@ class MarkdownTOCChunker(BaseDocumentChunker):
 
         content_lines = self.lines[start_line:end_line]
         return "\n".join(content_lines)
+
+    def _process_code_blocks(self) -> None:
+        """
+        Extract fenced code blocks from the markdown text and replace them with placeholders.
+        This prevents code comments from being misidentified as headers.
+        """
+        # Keep original text for later restoration
+        self.original_text = self.markdown_text
+        # Pattern to match fenced code blocks (``` ... ```)
+        code_block_pattern = re.compile(r"```[\s\S]*?```", re.MULTILINE)
+        self.code_blocks = {}
+        def _replacer(match):
+            placeholder = f"__CODE_BLOCK_{len(self.code_blocks)}__"
+            self.code_blocks[placeholder] = match.group(0)
+            return placeholder
+        self.markdown_text = code_block_pattern.sub(_replacer, self.markdown_text)
+
+    def _restore_code_blocks(self, text: str) -> str:
+        """
+        Restore code block placeholders in text back to their original code block content.
+        """
+        for placeholder, code in getattr(self, 'code_blocks', {}).items():
+            text = text.replace(placeholder, code)
+        return text
 
     def close(self) -> None:
         """Clean up resources"""
