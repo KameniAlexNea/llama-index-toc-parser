@@ -53,7 +53,8 @@ def _write_node_recursive(
     # TOCNode level 0 (Document Root) -> metadata['level'] = 0
     # TOCNode level 1 (Chapter) -> metadata['level'] = 1
     # Markdown H1 is '#'. We map TOC level 0 to H1, level 1 to H2, etc.
-    markdown_heading_level = _get_node_level(node) + 1
+    # Use level directly for Markdown heading (level 1 -> H1, level 2 -> H2, etc.)
+    markdown_heading_level = _get_node_level(node)
     if markdown_heading_level <= 0: # Ensure positive heading level
         markdown_heading_level = 1
     if markdown_heading_level > 6:  # Cap at H6
@@ -61,23 +62,9 @@ def _write_node_recursive(
     
     md_file.write(f"{'#' * markdown_heading_level} {title}\n\n")
 
-    metadata_md = _format_node_metadata_for_markdown(node)
-    if metadata_md:
-        md_file.write(metadata_md + "\n")
-
-    if node.text and node.text.strip():
-        md_file.write("```text\n")
-        md_file.write(node.text.strip() + "\n")
-        md_file.write("```\n\n")
-    else:
-        # Only print "No content" if it's not a "Document Root" node that might just be a container
-        if not (title == "Document Root" and _get_node_level(node) == 0):
-             md_file.write("_No specific content for this section._\n\n")
-        else:
-            md_file.write("\n")
-
-
-    md_file.write("---\n\n")  # Separator
+    # Print node text content as-is
+    if node.text is not None:
+        md_file.write(node.text + "\n\n")
 
     if node_id in children_map and children_map[node_id]:
         child_ids = children_map[node_id]
@@ -149,13 +136,13 @@ def visualize_text_nodes_to_markdown(text_nodes: List[TextNode], output_md_path:
     processed_node_ids: Set[str] = set()
 
     with open(output_md_path, "w", encoding="utf-8") as md_file:
-        main_doc_title = "Document Content Structure"
-        if sorted_root_ids:
-            first_root_node = node_map[sorted_root_ids[0]]
-            if "file_name" in first_root_node.metadata:
-                main_doc_title = f"Content of: {first_root_node.metadata['file_name']}"
+        # main_doc_title = "Document Content Structure"
+        # if sorted_root_ids:
+            #first_root_node = node_map[sorted_root_ids[0]]
+            #if "file_name" in first_root_node.metadata:
+            #    main_doc_title = f"Content of: {first_root_node.metadata['file_name']}"
         
-        md_file.write(f"# {main_doc_title}\n\n")
+        # md_file.write(f"# {main_doc_title}\n\n")
 
         if not sorted_root_ids and text_nodes:
             # This case implies all nodes have a TextNode parent within the list,
