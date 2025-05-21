@@ -22,8 +22,7 @@ class RSTTOCChunker(BaseDocumentChunker):
             rst_content: The reStructuredText content or file path
             source_display_name: The original name of the source
         """
-        super().__init__(source_path="", source_display_name=source_display_name)
-        self.rst_content = rst_content
+        super().__init__(source_path=rst_content, source_display_name=source_display_name)
         self.doctree = None
         self._document_loaded = False
         self._section_map = {}  # Maps docutils section nodes to our TOC nodes
@@ -31,16 +30,8 @@ class RSTTOCChunker(BaseDocumentChunker):
     def load_document(self) -> None:
         """Load the RST document and parse it with docutils"""
         try:
-            # Check if rst_content is a file path
-            try:
-                with open(self.rst_content, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except (FileNotFoundError, IsADirectoryError):
-                # Treat as RST content directly
-                content = self.rst_content
-
             # Parse the RST content
-            self.doctree = publish_doctree(content)
+            self.doctree = publish_doctree(self.source_path)
             self._document_loaded = True
         except Exception as e:
             logger.error(f"Error loading RST document: {e}")

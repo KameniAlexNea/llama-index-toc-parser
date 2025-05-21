@@ -22,15 +22,14 @@ class HTMLTOCChunker(BaseDocumentChunker):
             html_content: The HTML content as a string
             source_display_name: The original name of the source (e.g., URL or filename)
         """
-        super().__init__(source_path="", source_display_name=source_display_name)
-        self.html_content = html_content
+        super().__init__(source_path=html_content, source_display_name=source_display_name)
         self.soup = None
         self._document_loaded = False
 
     def load_document(self) -> None:
         """Load the HTML document and parse it with BeautifulSoup"""
         try:
-            self.soup = BeautifulSoup(self.html_content, "html.parser")
+            self.soup = BeautifulSoup(self.source_path, "html.parser")
             self._document_loaded = True
         except Exception as e:
             logger.error(f"Error loading HTML: {e}")

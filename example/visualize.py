@@ -179,7 +179,7 @@ from node_chunker.chunks import chunk_document_by_toc_to_text_nodes # Replace wi
 if __name__ == "__main__":
     # This is a placeholder. You'd get text_nodes from your actual chunking process.
     # Example:
-    pdf_file_path = "example/data/test_markdown.md"
+    pdf_file_path = "example/data/test_markdown.html"
     display_name = os.path.basename(pdf_file_path)
     
     try:
