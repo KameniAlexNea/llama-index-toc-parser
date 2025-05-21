@@ -187,19 +187,18 @@ def visualize_text_nodes_to_markdown(text_nodes: List[TextNode], output_md_path:
 
 # Example Usage (commented out):
 # """
-from node_chunker.pdf_chunking import PDFTOCChunker # Replace with your actual chunker
+from node_chunker.chunks import chunk_document_by_toc_to_text_nodes # Replace with your actual chunker
 #
 if __name__ == "__main__":
     # This is a placeholder. You'd get text_nodes from your actual chunking process.
     # Example:
-    pdf_file_path = "example/data/test_markdown.pdf"
+    pdf_file_path = "example/data/test_markdown.md"
     display_name = os.path.basename(pdf_file_path)
     
     try:
-        with PDFTOCChunker(pdf_path=pdf_file_path, source_display_name=display_name) as chunker:
-            text_nodes = chunker.get_text_nodes()
+        text_nodes = chunk_document_by_toc_to_text_nodes(pdf_file_path)
     
-        output_markdown_file = "document_visualization.md"
+        output_markdown_file = "example/ignore/document_visualization.md"
         if text_nodes:
             visualize_text_nodes_to_markdown(text_nodes, output_markdown_file)
         else:
@@ -252,11 +251,11 @@ if __name__ == "__main__":
     ]
 
     sample_text_nodes = [node1, node2, node3, node4] # Order doesn't strictly matter for visualizer input
-    output_file = "visualization_output_dummy.md"
+    output_file = "example/ignore/visualization_output_dummy.md"
     visualize_text_nodes_to_markdown(sample_text_nodes, output_file)
 
     # Test with an empty list
-    visualize_text_nodes_to_markdown([], "empty_visualization.md")
+    visualize_text_nodes_to_markdown([], "example/ignore/empty_visualization.md")
 
     # Test with a "Document Root" node
     root_doc_node = TextNode(
@@ -274,5 +273,5 @@ if __name__ == "__main__":
     )
     root_doc_node.relationships[NodeRelationship.CHILD] = [RelatedNodeInfo(node_id="chap_a", node_type=ObjectType.TEXT)]
 
-    visualize_text_nodes_to_markdown([root_doc_node, chapter_a_node], "visualization_with_root_dummy.md")
+    visualize_text_nodes_to_markdown([root_doc_node, chapter_a_node], "example/ignore/visualization_with_root_dummy.md")
 # """
