@@ -22,7 +22,9 @@ class RSTTOCChunker(BaseDocumentChunker):
             rst_content: The reStructuredText content or file path
             source_display_name: The original name of the source
         """
-        super().__init__(source_path=rst_content, source_display_name=source_display_name)
+        super().__init__(
+            source_path=rst_content, source_display_name=source_display_name
+        )
         self.doctree = None
         self._document_loaded = False
         self._section_map = {}  # Maps docutils section nodes to our TOC nodes

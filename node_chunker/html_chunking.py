@@ -1,7 +1,7 @@
 import logging
-from typing import Optional
-import tempfile
 import os
+import tempfile
+from typing import Optional
 
 from markitdown import MarkItDown
 
@@ -26,7 +26,9 @@ class HTMLTOCChunker(BaseDocumentChunker):
             html_content: The HTML content as a string
             source_display_name: The original name of the source (e.g., URL or filename)
         """
-        super().__init__(source_path=source_display_name, source_display_name=source_display_name)
+        super().__init__(
+            source_path=source_display_name, source_display_name=source_display_name
+        )
         self.html_content = html_content
         self.markdown_content: Optional[str] = None
         self._document_loaded = False
@@ -37,7 +39,9 @@ class HTMLTOCChunker(BaseDocumentChunker):
         temp_file_path = None
         try:
             # MarkItDown expects a file path, so save html_content to a temporary file
-            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".html", encoding="utf-8") as tmp_file:
+            with tempfile.NamedTemporaryFile(
+                mode="w", delete=False, suffix=".html", encoding="utf-8"
+            ) as tmp_file:
                 tmp_file.write(self.html_content)
                 temp_file_path = tmp_file.name
 
@@ -68,13 +72,15 @@ class HTMLTOCChunker(BaseDocumentChunker):
         if self.markdown_content is None:
             logger.error("Markdown content is not available after load_document.")
             # Return a basic root node if conversion failed or produced None
-            self.root_node = TOCNode(title="Document Root", page_num=0, level=0, content="")
+            self.root_node = TOCNode(
+                title="Document Root", page_num=0, level=0, content=""
+            )
             return self.root_node
 
         # Use MarkdownTOCChunker to process the converted content
         md_chunker = MarkdownTOCChunker(
             markdown_text=self.markdown_content,
-            source_display_name=self.source_display_name
+            source_display_name=self.source_display_name,
         )
         self.root_node = md_chunker.build_toc_tree()
 

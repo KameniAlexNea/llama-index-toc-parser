@@ -37,7 +37,9 @@ class DOCXTOCChunker(BaseDocumentChunker):
             self.markdown_content = result.text_content
             self._document_loaded = True
         except Exception as e:
-            logger.error(f"Error converting Word document to Markdown using MarkItDown: {e}")
+            logger.error(
+                f"Error converting Word document to Markdown using MarkItDown: {e}"
+            )
             raise
 
     def build_toc_tree(self) -> TOCNode:
@@ -53,13 +55,15 @@ class DOCXTOCChunker(BaseDocumentChunker):
         if self.markdown_content is None:
             logger.error("Markdown content is not available after load_document.")
             # Return a basic root node if conversion failed or produced None
-            self.root_node = TOCNode(title="Document Root", page_num=0, level=0, content="")
+            self.root_node = TOCNode(
+                title="Document Root", page_num=0, level=0, content=""
+            )
             return self.root_node
 
         # Use MarkdownTOCChunker to process the converted content
         md_chunker = MarkdownTOCChunker(
             markdown_text=self.markdown_content,
-            source_display_name=self.source_display_name
+            source_display_name=self.source_display_name,
         )
         self.root_node = md_chunker.build_toc_tree()
 
