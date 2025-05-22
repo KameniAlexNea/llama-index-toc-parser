@@ -8,14 +8,13 @@ from markitdown import MarkItDown
 from .document_chunking import BaseDocumentChunker, TOCNode
 from .md_chunking import MarkdownTOCChunker
 
-# Get logger for this module
 logger = logging.getLogger(__name__)
 
 
 class HTMLTOCChunker(BaseDocumentChunker):
     """
-    A document chunker that converts HTML to Markdown using MarkItDown and then creates a
-    hierarchical tree of nodes based on Markdown headings.
+    A document chunker that converts HTML to Markdown using MarkItDown and then
+    creates a hierarchical tree of nodes based on Markdown headings.
     """
 
     def __init__(self, html_content: str, source_display_name: str):
@@ -30,13 +29,14 @@ class HTMLTOCChunker(BaseDocumentChunker):
             source_path=source_display_name, source_display_name=source_display_name
         )
         self.html_content = html_content
-        self.markdown_content: Optional[str] = None
+        self.markdown_content = None
         self._document_loaded = False
 
     def load_document(self) -> None:
         """Load the HTML string, convert it to Markdown using MarkItDown."""
         md_converter = MarkItDown(enable_plugins=False)
         temp_file_path = None
+
         try:
             # MarkItDown expects a file path, so save html_content to a temporary file
             with tempfile.NamedTemporaryFile(
@@ -45,15 +45,12 @@ class HTMLTOCChunker(BaseDocumentChunker):
                 tmp_file.write(self.html_content)
                 temp_file_path = tmp_file.name
 
-            if temp_file_path:
-                result = md_converter.convert(temp_file_path)
-                self.markdown_content = result.text_content
-                self._document_loaded = True
-            else:
-                raise Exception("Failed to create a temporary file for HTML content.")
+            result = md_converter.convert(temp_file_path)
+            self.markdown_content = result.text_content
+            self._document_loaded = True
 
         except Exception as e:
-            logger.error(f"Error converting HTML to Markdown using MarkItDown: {e}")
+            logger.error(f"Error converting HTML to Markdown: {e}")
             raise
         finally:
             if temp_file_path and os.path.exists(temp_file_path):
@@ -71,7 +68,7 @@ class HTMLTOCChunker(BaseDocumentChunker):
 
         if self.markdown_content is None:
             logger.error("Markdown content is not available after load_document.")
-            # Return a basic root node if conversion failed or produced None
+            # Return a basic root node if conversion failed
             self.root_node = TOCNode(
                 title="Document Root", page_num=0, level=0, content=""
             )

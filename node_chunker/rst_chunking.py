@@ -1,7 +1,7 @@
 import logging
-from typing import Optional
-import tempfile
 import os
+import tempfile
+from typing import Optional
 
 from markitdown import MarkItDown
 
@@ -29,7 +29,7 @@ class RSTTOCChunker(BaseDocumentChunker):
         super().__init__(
             source_path=rst_content, source_display_name=source_display_name
         )
-        self.markdown_content: Optional[str] = None
+        self.markdown_content = None
         self._document_loaded = False
 
     def load_document(self) -> None:
@@ -58,7 +58,7 @@ class RSTTOCChunker(BaseDocumentChunker):
             self._document_loaded = True
 
         except Exception as e:
-            logger.error(f"Error converting RST document to Markdown using MarkItDown: {e}")
+            logger.error(f"Error converting RST document to Markdown: {e}")
             raise
         finally:
             if temp_file_path and os.path.exists(temp_file_path):
@@ -76,7 +76,7 @@ class RSTTOCChunker(BaseDocumentChunker):
 
         if self.markdown_content is None:
             logger.error("Markdown content is not available after load_document.")
-            # Return a basic root node if conversion failed or produced None
+            # Return a basic root node if conversion failed
             self.root_node = TOCNode(
                 title="Document Root", page_num=0, level=0, content=""
             )

@@ -213,7 +213,7 @@ from node_chunker.chunks import (
 if __name__ == "__main__":
     # This is a placeholder. You'd get text_nodes from your actual chunking process.
     # Example:
-    pdf_file_path = "example/data/test_markdown.docx"
+    pdf_file_path = "example/data/test_markdown.rst"
     display_name = os.path.basename(pdf_file_path)
 
     try:

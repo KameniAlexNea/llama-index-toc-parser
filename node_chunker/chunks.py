@@ -1,12 +1,12 @@
 import importlib.util
 import logging
 import os
-import tempfile
 from enum import Enum
 from typing import List, Optional, Set, Union
 
-import requests
 from llama_index.core.schema import TextNode
+
+from .utils import download_temp_file, read_file_content
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
@@ -89,24 +89,12 @@ def download_file_from_url(url: str, suffix: str = None) -> str:
 
     Returns:
         Path to the downloaded temporary file
+
+    Note: This function is deprecated, use utils.download_temp_file instead
     """
-    try:
-        response = requests.get(url, stream=True)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-
-        # Create a temporary file with appropriate suffix
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        temp_path = temp_file.name
-
-        # Write the content to the temporary file
-        with open(temp_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-
-        return temp_path
-    except Exception as e:
-        logger.error(f"Error downloading file from URL: {e}")
-        raise
+    logger.warning("download_file_from_url is deprecated. Use utils.download_temp_file instead.")
+    from .utils import download_temp_file
+    return download_temp_file(url, suffix)
 
 
 def _import_chunker_class(format_type: DocumentFormat):
@@ -164,6 +152,10 @@ def chunk_document_by_toc_to_text_nodes(
 
     Returns:
         A list of TextNode objects representing the document chunks.
+
+    Raises:
+        ValueError: If the format is unsupported or document processing fails
+        ImportError: If required dependencies are missing
     """
     # Try to auto-detect format from file extension if not specified
     if format_type is None:
@@ -180,7 +172,7 @@ def chunk_document_by_toc_to_text_nodes(
     # Check if the format is supported
     if not _check_format_supported(format_type):
         available = get_supported_formats()
-        raise ValueError(
+        raise ImportError(
             f"Format {format_type} is not supported (missing dependencies). "
             f"Available formats: {available}"
         )
@@ -200,8 +192,7 @@ def chunk_document_by_toc_to_text_nodes(
 
             if is_file_path:
                 # It's a file path to a markdown file
-                with open(source, "r", encoding="utf-8") as f:
-                    markdown_text = f.read()
+                markdown_text = read_file_content(source)
             else:
                 # It's the markdown text itself
                 markdown_text = source
@@ -218,11 +209,11 @@ def chunk_document_by_toc_to_text_nodes(
 
             if is_file_path:
                 # It's a file path to an HTML file
-                with open(source, "r", encoding="utf-8") as f:
-                    html_content = f.read()
+                html_content = read_file_content(source)
             elif is_url:
                 # Download HTML content from URL
-                response = requests.get(source)
+                import requests
+                response = requests.get(source, timeout=30)
                 response.raise_for_status()
                 html_content = response.text
                 source_name_for_metadata = source  # Use URL as source name
@@ -240,7 +231,8 @@ def chunk_document_by_toc_to_text_nodes(
             # Word document handling
             if is_url:
                 logger.info(f"Downloading Word document from URL: {source}")
-                temp_file_path = download_file_from_url(source, suffix=".docx")
+                from .utils import download_temp_file
+                temp_file_path = download_temp_file(source, suffix=".docx")
                 actual_source_path = temp_file_path
 
             DOCXTOCChunker = _import_chunker_class(DocumentFormat.DOCX)
@@ -255,7 +247,8 @@ def chunk_document_by_toc_to_text_nodes(
             # Jupyter notebook handling
             if is_url:
                 logger.info(f"Downloading Jupyter notebook from URL: {source}")
-                temp_file_path = download_file_from_url(source, suffix=".ipynb")
+                from .utils import download_temp_file
+                temp_file_path = download_temp_file(source, suffix=".ipynb")
                 actual_source_path = temp_file_path
 
             JupyterNotebookTOCChunker = _import_chunker_class(DocumentFormat.JUPYTER)
@@ -272,11 +265,11 @@ def chunk_document_by_toc_to_text_nodes(
 
             if is_file_path:
                 # It's a file path to an RST file
-                with open(source, "r", encoding="utf-8") as f:
-                    rst_content = f.read()
+                rst_content = read_file_content(source)
             elif is_url:
                 # Download RST content from URL
-                response = requests.get(source)
+                import requests
+                response = requests.get(source, timeout=30)
                 response.raise_for_status()
                 rst_content = response.text
                 source_name_for_metadata = source  # Use URL as source name
@@ -294,7 +287,8 @@ def chunk_document_by_toc_to_text_nodes(
             # PDF handling
             if is_url:
                 logger.info(f"Downloading PDF from URL: {source}")
-                temp_file_path = download_file_from_url(source, suffix=".pdf")
+                from .utils import download_temp_file
+                temp_file_path = download_temp_file(source, suffix=".pdf")
                 actual_source_path = temp_file_path
 
             PDFTOCChunker = _import_chunker_class(DocumentFormat.PDF)
@@ -308,6 +302,12 @@ def chunk_document_by_toc_to_text_nodes(
         else:
             raise ValueError(f"Unsupported format type: {format_type}")
 
+    except Exception as e:
+        logger.error(f"Error processing document: {str(e)}")
+        raise
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
-            os.unlink(temp_file_path)
+            try:
+                os.unlink(temp_file_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete temporary file {temp_file_path}: {str(e)}")
