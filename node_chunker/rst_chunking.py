@@ -1,9 +1,12 @@
 import logging
+from typing import Optional
+import tempfile
+import os
 
-from docutils.core import publish_doctree
-from docutils.nodes import Node, Text, section, title
+from markitdown import MarkItDown
 
 from .document_chunking import BaseDocumentChunker, TOCNode
+from .md_chunking import MarkdownTOCChunker
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
@@ -11,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 class RSTTOCChunker(BaseDocumentChunker):
     """
-    A document chunker that creates a hierarchical tree of nodes based on reStructuredText sections.
+    A document chunker that converts reStructuredText to Markdown using MarkItDown and then
+    creates a hierarchical tree of nodes based on Markdown headings.
     """
 
     def __init__(self, rst_content: str, source_display_name: str):
@@ -25,23 +29,44 @@ class RSTTOCChunker(BaseDocumentChunker):
         super().__init__(
             source_path=rst_content, source_display_name=source_display_name
         )
-        self.doctree = None
+        self.markdown_content: Optional[str] = None
         self._document_loaded = False
-        self._section_map = {}  # Maps docutils section nodes to our TOC nodes
 
     def load_document(self) -> None:
-        """Load the RST document and parse it with docutils"""
+        """Load the RST document, convert it to Markdown using MarkItDown."""
+        md_converter = MarkItDown(enable_plugins=False)
+        temp_file_path = None
+
         try:
-            # Parse the RST content
-            self.doctree = publish_doctree(self.source_path)
+            # Check if source_path is a file path or RST content
+            if os.path.isfile(self.source_path):
+                # If it's a file path, use it directly
+                result = md_converter.convert(self.source_path)
+                self.markdown_content = result.text_content
+            else:
+                # Assume it's RST content string, save to temp file first
+                with tempfile.NamedTemporaryFile(
+                    mode="w", delete=False, suffix=".rst", encoding="utf-8"
+                ) as tmp_file:
+                    tmp_file.write(self.source_path)
+                    temp_file_path = tmp_file.name
+
+                # Convert the temp file to markdown
+                result = md_converter.convert(temp_file_path)
+                self.markdown_content = result.text_content
+
             self._document_loaded = True
+
         except Exception as e:
-            logger.error(f"Error loading RST document: {e}")
+            logger.error(f"Error converting RST document to Markdown using MarkItDown: {e}")
             raise
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
 
     def build_toc_tree(self) -> TOCNode:
         """
-        Build a tree structure from the RST sections.
+        Build a tree structure from the converted Markdown content.
 
         Returns:
             The root node of the TOC tree
@@ -49,112 +74,24 @@ class RSTTOCChunker(BaseDocumentChunker):
         if not self._document_loaded:
             self.load_document()
 
-        # Initialize the document tree
-        self.root_node = TOCNode(title="Document Root", page_num=0, level=0)
-
-        # If no sections found, treat entire document as one chunk
-        if not self.doctree.traverse(section):
-            self.root_node.content = self._get_full_text(self.doctree)
-            self.root_node.end_page = 0  # RST doesn't have pages
+        if self.markdown_content is None:
+            logger.error("Markdown content is not available after load_document.")
+            # Return a basic root node if conversion failed or produced None
+            self.root_node = TOCNode(
+                title="Document Root", page_num=0, level=0, content=""
+            )
             return self.root_node
 
-        # Process sections recursively
-        self._process_sections(self.doctree, self.root_node, 0)
+        # Use MarkdownTOCChunker to process the converted content
+        md_chunker = MarkdownTOCChunker(
+            markdown_text=self.markdown_content,
+            source_display_name=self.source_display_name,
+        )
+        self.root_node = md_chunker.build_toc_tree()
 
         return self.root_node
 
-    def _process_sections(
-        self, node: Node, parent_toc_node: TOCNode, level: int
-    ) -> None:
-        """
-        Process RST document sections recursively.
-
-        Args:
-            node: Current docutils node
-            parent_toc_node: Parent TOCNode to attach new nodes to
-            level: Current hierarchy level
-        """
-        # Process all sections at this level
-        for section_node in node.traverse(section, siblings=True):
-            # Skip if we've already processed this section
-            if id(section_node) in self._section_map:
-                continue
-
-            # Get the section title
-            section_title = "Untitled Section"
-            title_nodes = section_node.traverse(title, siblings=True, descend=False)
-            if title_nodes:
-                section_title = self._get_full_text(title_nodes[0]).strip()
-
-            # Create a TOC node for this section
-            section_level = level + 1
-            toc_node = TOCNode(
-                title=section_title,
-                page_num=0,  # RST doesn't have pages
-                level=section_level,
-            )
-            parent_toc_node.add_child(toc_node)
-            self._section_map[id(section_node)] = toc_node
-
-            # Extract content from this section, excluding subsections
-            toc_node.content = self._extract_section_content(section_node)
-            toc_node.end_page = 0  # RST doesn't have pages
-
-            # Process subsections recursively
-            subsections = list(
-                section_node.traverse(section, siblings=True, descend=False)
-            )
-            if subsections:
-                for subsection in subsections:
-                    self._process_sections(subsection, toc_node, section_level)
-
-    def _extract_section_content(self, section_node: Node) -> str:
-        """
-        Extract content from a section, excluding subsections.
-
-        Args:
-            section_node: The section node to extract content from
-
-        Returns:
-            The extracted content as a string
-        """
-        # Get the title first
-        title_text = ""
-        title_nodes = section_node.traverse(title, siblings=True, descend=False)
-        if title_nodes:
-            title_text = self._get_full_text(title_nodes[0])
-
-        # Extract content excluding subsections
-        content_parts = [title_text] if title_text else []
-
-        # Process all child nodes except subsections and title
-        for node in section_node.children:
-            if not isinstance(node, title) and not isinstance(node, section):
-                content_parts.append(self._get_full_text(node))
-
-        return "\n\n".join(part for part in content_parts if part.strip())
-
-    def _get_full_text(self, node: Node) -> str:
-        """
-        Extract all text from a node and its children.
-
-        Args:
-            node: The docutils node to extract text from
-
-        Returns:
-            The extracted text as a string
-        """
-        if isinstance(node, Text):
-            return node.astext()
-
-        text_parts = []
-        for child in node.children:
-            text_parts.append(self._get_full_text(child))
-
-        return "".join(text_parts)
-
     def close(self) -> None:
         """Clean up resources"""
-        self.doctree = None
-        self._section_map = {}
+        self.markdown_content = None
         self._document_loaded = False

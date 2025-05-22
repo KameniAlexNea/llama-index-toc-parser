@@ -39,7 +39,6 @@ dependencies = [
     "requests",
     "markitdown[docx,pdf]>=0.1.1",
     "pymupdf>=1.25.5",
-    "docutils>=0.21.2",
 ]
 
 [project.urls]

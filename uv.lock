@@ -1513,7 +1513,6 @@ name = "node-chunker"
 version = "0.1.1"
 source = { editable = "." }
 dependencies = [
-    { name = "docutils" },
     { name = "llama-index-core" },
     { name = "markitdown", extra = ["docx", "pdf"] },
     { name = "pymupdf" },
@@ -1549,7 +1548,6 @@ requires-dist = [
     { name = "codespell", marker = "extra == 'dev'", specifier = ">=2.2.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=5.0" },
-    { name = "docutils", specifier = ">=0.21.2" },
     { name = "llama-index-core", specifier = ">=0.12.36,<0.13" },
     { name = "markitdown", extras = ["docx", "pdf"], specifier = ">=0.1.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
