@@ -48,7 +48,7 @@ Repository = "https://github.com/KameniAlexNea/llama-index-toc-parser"
 # Format-specific dependencies
 pdf = ["pymupdf>=1.25.5"]
 docx = ["python-docx>=1.1.2"]
-html = ["beautifulsoup4>=4.13.4"]
+html = ["markdownify>=1.1.0"]
 jupyter = ["nbformat>=5.10.4"]
 rst = ["docutils>=0.21.2"]
 
@@ -56,7 +56,7 @@ rst = ["docutils>=0.21.2"]
 all = [
     "pymupdf>=1.25.5",
     "python-docx>=1.1.2",
-    "beautifulsoup4>=4.13.4",
+    "markdownify>=1.1.0",
     "nbformat>=5.10.4",
     "docutils>=0.21.2",
 ]
