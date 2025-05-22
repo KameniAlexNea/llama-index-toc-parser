@@ -1,7 +1,9 @@
 import logging
 from typing import Optional
+import tempfile
+import os
 
-import markdownify
+from markitdown import MarkItDown
 
 from .document_chunking import BaseDocumentChunker, TOCNode
 from .md_chunking import MarkdownTOCChunker
@@ -12,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class HTMLTOCChunker(BaseDocumentChunker):
     """
-    A document chunker that converts HTML to Markdown and then creates a
+    A document chunker that converts HTML to Markdown using MarkItDown and then creates a
     hierarchical tree of nodes based on Markdown headings.
     """
 
@@ -24,19 +26,34 @@ class HTMLTOCChunker(BaseDocumentChunker):
             html_content: The HTML content as a string
             source_display_name: The original name of the source (e.g., URL or filename)
         """
-        super().__init__(source_path="", source_display_name=source_display_name)
+        super().__init__(source_path=source_display_name, source_display_name=source_display_name)
         self.html_content = html_content
         self.markdown_content: Optional[str] = None
         self._document_loaded = False
 
     def load_document(self) -> None:
-        """Load the HTML document, convert it to Markdown."""
+        """Load the HTML string, convert it to Markdown using MarkItDown."""
+        md_converter = MarkItDown(enable_plugins=False)
+        temp_file_path = None
         try:
-            self.markdown_content = markdownify.markdownify(self.html_content)
-            self._document_loaded = True
+            # MarkItDown expects a file path, so save html_content to a temporary file
+            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".html", encoding="utf-8") as tmp_file:
+                tmp_file.write(self.html_content)
+                temp_file_path = tmp_file.name
+
+            if temp_file_path:
+                result = md_converter.convert(temp_file_path)
+                self.markdown_content = result.text_content
+                self._document_loaded = True
+            else:
+                raise Exception("Failed to create a temporary file for HTML content.")
+
         except Exception as e:
-            logger.error(f"Error converting HTML to Markdown: {e}")
+            logger.error(f"Error converting HTML to Markdown using MarkItDown: {e}")
             raise
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
 
     def build_toc_tree(self) -> TOCNode:
         """
