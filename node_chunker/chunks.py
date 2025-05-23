@@ -262,7 +262,7 @@ def chunk_document_by_toc_to_document_graph(
 
             MarkdownTOCChunker = _import_chunker_class(DocumentFormat.MARKDOWN)
             with MarkdownTOCChunker(markdown_text, source_name_for_metadata) as chunker:
-                return chunker.get_document_graph()
+                return chunker.build_toc_tree()
 
         elif format_type == DocumentFormat.PDF:
             if is_url:
@@ -275,7 +275,7 @@ def chunk_document_by_toc_to_document_graph(
                 pdf_path=actual_source_path,
                 source_display_name=source_name_for_metadata,
             ) as chunker:
-                return chunker.get_document_graph()
+                return chunker.build_toc_tree()
 
         else:
             raise ValueError(f"DocumentGraph support not yet implemented for format: {format_type}")

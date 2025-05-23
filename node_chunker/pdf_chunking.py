@@ -326,11 +326,7 @@ class PDFTOCChunker(BaseDocumentChunker):
 
         return "\n".join(content_parts).strip()
 
-    def get_document_graph(self) -> DocumentGraph:
-        """Get the document graph structure."""
-        if not self._document_loaded:
-            self.build_toc_tree()
-        return self.document_graph
+    
 
     def get_nodes_preorder(self) -> List[DocumentNode]:
         """Get all nodes in pre-order traversal."""
