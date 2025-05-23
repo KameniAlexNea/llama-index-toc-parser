@@ -3,7 +3,8 @@ from typing import List, Optional
 
 import fitz  # PyMuPDF
 
-from .document_chunking import BaseDocumentChunker, TOCNode
+from .document_chunking import BaseDocumentChunker
+from .data_model import DocumentGraph, DocumentNode
 
 logger = logging.getLogger(__name__)
 TEXT_EXTRACTION_FLAGS = (
@@ -13,7 +14,8 @@ TEXT_EXTRACTION_FLAGS = (
 
 class PDFTOCChunker(BaseDocumentChunker):
     """
-    A document chunker that creates a hierarchical tree of nodes based on the PDF's table of contents.
+    A document chunker that creates a hierarchical graph of nodes based on the PDF's table of contents.
+    Uses DocumentGraph structure only.
     """
 
     def __init__(self, pdf_path: str, source_display_name: str):
@@ -28,7 +30,9 @@ class PDFTOCChunker(BaseDocumentChunker):
         self.doc = None
         self.toc = None
         self._document_loaded = False
-        self.root_node.y_position = 0.0  # Document root starts at y=0 on page 0
+        
+        # Initialize the document graph (replaces root_node)
+        self.document_graph = DocumentGraph("Document Root")
 
     def load_document(self) -> None:
         """Load the PDF document and extract its TOC."""
@@ -43,31 +47,38 @@ class PDFTOCChunker(BaseDocumentChunker):
             logger.error(f"Error loading PDF: {e}")
             raise
 
-    def build_toc_tree(self) -> TOCNode:
+    def build_toc_tree(self) -> DocumentGraph:
         """
-        Build a tree structure from the TOC entries.
+        Build a graph structure from the TOC entries.
 
         Returns:
-            The root node of the TOC tree
+            The document graph
         """
         if not self._document_loaded:
             self.load_document()
 
         if not self.toc:
             # Create a single node for the whole document
-            self.root_node.end_page = self.doc.page_count - 1
-            for page_num in range(self.doc.page_count):
-                page = self.doc.load_page(page_num)
-                self.root_node.content += page.get_text() + "\n"
-            return self.root_node
+            root_node = self.document_graph.get_node(self.document_graph.root_id)
+            if root_node:
+                content = ""
+                for page_num in range(self.doc.page_count):
+                    page = self.doc.load_page(page_num)
+                    content += page.get_text() + "\n"
+                
+                root_node.content = content
+                root_node.end_page = self.doc.page_count - 1
+                root_node.y_position = 0.0
+            
+            return self.document_graph
 
-        # Process PyMuPDF TOC and create a tree
-        self._process_outline(self.toc, self.root_node)
+        # Process PyMuPDF TOC and create graph
+        self._process_outline(self.toc, self.document_graph.root_id)
 
         # Determine end pages and extract content
-        self._set_end_pages_and_content(self.root_node)
+        self._set_end_pages_and_content(self.document_graph.root_id)
 
-        return self.root_node
+        return self.document_graph
 
     def _find_heading_y_position(self, page: fitz.Page, title: str) -> float:
         """
@@ -98,13 +109,13 @@ class PDFTOCChunker(BaseDocumentChunker):
 
         return 0.0  # Fallback if title not found
 
-    def _process_outline(self, toc_items: List, parent_node: TOCNode, level=1) -> None:
+    def _process_outline(self, toc_items: List, parent_node_id: str, level=1) -> None:
         """
-        Process TOC items into our node tree.
+        Process TOC items into our document graph.
 
         Args:
             toc_items: TOC items from PyMuPDF
-            parent_node: The parent node to attach to
+            parent_node_id: The parent node ID to attach to
             level: Current hierarchy level
         """
         if not toc_items:
@@ -128,14 +139,17 @@ class PDFTOCChunker(BaseDocumentChunker):
                 if current_item_level == level:
                     page_obj = self.doc.load_page(page_num)
                     y_pos = self._find_heading_y_position(page_obj, title)
-                    node = TOCNode(
+                    
+                    # Add node to graph
+                    node_id = self.document_graph.add_node(
                         title=title,
-                        page_num=page_num,
                         level=level,
-                        parent=parent_node,
-                        y_position=y_pos,
+                        page_num=page_num,
+                        y_position=y_pos
                     )
-                    parent_node.add_child(node)
+                    
+                    # Link to parent
+                    self.document_graph.add_child(parent_node_id, node_id)
                     processed_indices.add(i)
 
                     # Find children of this node
@@ -152,30 +166,37 @@ class PDFTOCChunker(BaseDocumentChunker):
                         j += 1
 
                     if children_toc_items:
-                        self._process_outline(children_toc_items, node, level + 1)
+                        self._process_outline(children_toc_items, node_id, level + 1)
 
-    def _set_end_pages_and_content(self, node: TOCNode) -> int:
+    def _set_end_pages_and_content(self, node_id: str) -> int:
         """
         Recursively set end pages and extract content for each node.
 
         Args:
-            node: The current node to process
+            node_id: The current node ID to process
 
         Returns:
             The end page of this node (overall span)
         """
+        node = self.document_graph.get_node(node_id)
+        if not node:
+            return 0
+
+        children = self.document_graph.get_children(node_id)
+
         # Determine node's overall end page (span)
-        if not node.children:
+        if not children:
             # Leaf node: end_page is determined by the next sibling or document end
             next_section_start_page = self.doc.page_count
-            if node.parent and node.parent.children:
-                siblings = node.parent.children
+            parent = self.document_graph.get_parent(node_id)
+            if parent:
+                siblings = self.document_graph.get_children(parent.node_id)
                 try:
-                    idx = siblings.index(node)
-                    if idx < len(siblings) - 1:
-                        next_section_start_page = siblings[idx + 1].page_num
-                except ValueError:
-                    pass  # Should not occur
+                    current_idx = next(i for i, sibling in enumerate(siblings) if sibling.node_id == node_id)
+                    if current_idx < len(siblings) - 1:
+                        next_section_start_page = siblings[current_idx + 1].page_num
+                except (StopIteration, IndexError):
+                    pass
 
             node.end_page = max(
                 node.page_num, min(next_section_start_page - 1, self.doc.page_count - 1)
@@ -183,8 +204,8 @@ class PDFTOCChunker(BaseDocumentChunker):
         else:
             # Non-leaf node: end_page is determined by the last child's end_page
             last_child_end_page = -1
-            for child in node.children:
-                child_end_page = self._set_end_pages_and_content(child)
+            for child in children:
+                child_end_page = self._set_end_pages_and_content(child.node_id)
                 last_child_end_page = max(last_child_end_page, child_end_page)
             node.end_page = max(node.page_num, last_child_end_page)
 
@@ -193,8 +214,8 @@ class PDFTOCChunker(BaseDocumentChunker):
         content_end_page_idx = node.end_page
         content_end_y_on_final_page = None
 
-        if node.children:
-            first_child = node.children[0]
+        if children:
+            first_child = children[0]
             if first_child.page_num > node.page_num:
                 # Parent's content ends on the page before the first child's page
                 content_end_page_idx = first_child.page_num - 1
@@ -204,15 +225,16 @@ class PDFTOCChunker(BaseDocumentChunker):
                 content_end_y_on_final_page = first_child.y_position
         else:  # Leaf node
             # Check if next sibling is on this content_end_page_idx
-            if node.parent and node.parent.children:
-                siblings = node.parent.children
+            parent = self.document_graph.get_parent(node_id)
+            if parent:
+                siblings = self.document_graph.get_children(parent.node_id)
                 try:
-                    idx = siblings.index(node)
-                    if idx < len(siblings) - 1:
-                        next_sibling = siblings[idx + 1]
+                    current_idx = next(i for i, sibling in enumerate(siblings) if sibling.node_id == node_id)
+                    if current_idx < len(siblings) - 1:
+                        next_sibling = siblings[current_idx + 1]
                         if next_sibling.page_num == content_end_page_idx:
                             content_end_y_on_final_page = next_sibling.y_position
-                except ValueError:
+                except (StopIteration, IndexError):
                     pass
 
         # Ensure content_end_page_idx is valid
@@ -303,6 +325,19 @@ class PDFTOCChunker(BaseDocumentChunker):
                 content_parts.append("\n".join(page_content))
 
         return "\n".join(content_parts).strip()
+
+    def get_document_graph(self) -> DocumentGraph:
+        """Get the document graph structure."""
+        if not self._document_loaded:
+            self.build_toc_tree()
+        return self.document_graph
+
+    def get_nodes_preorder(self) -> List[DocumentNode]:
+        """Get all nodes in pre-order traversal."""
+        if not self._document_loaded:
+            self.build_toc_tree()
+
+        return list(self.document_graph.get_content_preorder())
 
     def close(self) -> None:
         """Close the PDF file and clean up resources."""

@@ -2,7 +2,8 @@ import logging
 import re
 from typing import Dict, List, Pattern, Tuple
 
-from .document_chunking import BaseDocumentChunker, TOCNode
+from .document_chunking import BaseDocumentChunker
+from .data_model import DocumentGraph, DocumentNode
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
@@ -10,11 +11,8 @@ logger = logging.getLogger(__name__)
 
 class MarkdownTOCChunker(BaseDocumentChunker):
     """
-    A document chunker that creates a hierarchical tree of nodes based on Markdown headers.
-
-    This chunker analyzes markdown text, identifies headings (both ATX and Setext style),
-    and builds a tree structure representing the document's organization. It handles
-    code blocks appropriately to prevent false header detection.
+    A document chunker that creates a hierarchical graph of nodes based on Markdown headers.
+    Uses DocumentGraph structure only.
     """
 
     # Regex patterns for markdown parsing
@@ -47,6 +45,9 @@ class MarkdownTOCChunker(BaseDocumentChunker):
         self.code_blocks: Dict[str, str] = {}
         self.original_text: str = markdown_text
         self._process_code_blocks()
+        
+        # Initialize the document graph (replaces root_node)
+        self.document_graph = DocumentGraph("Document Root")
 
     def load_document(self) -> None:
         """
@@ -65,24 +66,15 @@ class MarkdownTOCChunker(BaseDocumentChunker):
             logger.error(f"Error loading markdown: {e}")
             raise ValueError(f"Failed to load markdown document: {e}")
 
-    def build_toc_tree(self) -> TOCNode:
+    def build_toc_tree(self) -> DocumentGraph:
         """
-        Build a tree structure from the markdown headers.
-
-        This method analyzes the markdown document for headers, creates a hierarchical
-        structure, and extracts content for each section.
+        Build a graph structure from the markdown headers.
 
         Returns:
-            The root node of the TOC tree
-
-        Raises:
-            ValueError: If headers can't be extracted properly
+            The document graph
         """
         if not self._document_loaded:
             self.load_document()
-
-        # Initialize the document tree
-        self.root_node = TOCNode(title="Document Root", page_num=0, level=0)
 
         # Find all headers and their respective line numbers
         try:
@@ -93,40 +85,32 @@ class MarkdownTOCChunker(BaseDocumentChunker):
 
         if not headers:
             # No headers found, treat the entire document as one chunk
-            # Use original text with code blocks intact
-            self.root_node.content = self.original_text
-            self.root_node.end_page = 0  # Only one page for markdown
-            return self.root_node
+            root_node = self.document_graph.get_node(self.document_graph.root_id)
+            if root_node:
+                root_node.content = self.original_text
+                root_node.end_page = 0  # Only one page for markdown
+            return self.document_graph
 
-        # Process headers and build TOC tree
+        # Process headers and build graph tree
         try:
             self._build_tree_from_headers(headers)
         except Exception as e:
             logger.error(f"Error building tree from headers: {e}")
             # Fallback to basic document
-            self.root_node.content = self.original_text
+            root_node = self.document_graph.get_node(self.document_graph.root_id)
+            if root_node:
+                root_node.content = self.original_text
 
-        return self.root_node
+        return self.document_graph
 
     def _build_tree_from_headers(self, headers: List[Tuple[int, int, str]]) -> None:
         """
-        Build the TOC tree from the extracted headers.
+        Build the graph tree from the extracted headers.
 
         Args:
             headers: List of tuples with (line_number, header_level, header_title)
         """
         for i, (line_num, level, title) in enumerate(headers):
-            # Create a new node for this header
-            node = TOCNode(
-                title=title,
-                page_num=line_num,  # Using line number instead of page number for markdown
-                level=level,
-            )
-
-            # Find the appropriate parent for this node based on its level
-            parent = self._find_parent_for_level(self.root_node, level)
-            parent.add_child(node)
-
             # Determine the content range for this node
             start_line = line_num + 1  # Start after the header line
 
@@ -138,8 +122,59 @@ class MarkdownTOCChunker(BaseDocumentChunker):
             # Extract content for this section
             content_slice = self._extract_content(start_line, end_line)
             # Restore code blocks in extracted content
-            node.content = self._restore_code_blocks(content_slice)
-            node.end_page = 0  # Markdown is treated as a single page
+            content = self._restore_code_blocks(content_slice)
+
+            # Add node to graph
+            node_id = self.document_graph.add_node(
+                title=title,
+                content=content,
+                level=level,
+                page_num=line_num,  # Using line number instead of page number for markdown
+                end_page=0,  # Markdown is treated as a single page
+            )
+
+            # Find the appropriate parent for this node based on its level
+            parent_id = self._find_parent_for_level(self.document_graph.root_id, level)
+            self.document_graph.add_child(parent_id, node_id)
+
+    def _find_parent_for_level(self, start_node_id: str, target_level: int) -> str:
+        """
+        Find the appropriate parent node ID for a node with the given level.
+
+        Args:
+            start_node_id: Current node ID to start search from
+            target_level: The level of the node we want to find a parent for
+
+        Returns:
+            The appropriate parent node ID
+        """
+        # If this is a level 1 header, its parent is the root node
+        if target_level == 1:
+            return self.document_graph.root_id
+
+        start_node = self.document_graph.get_node(start_node_id)
+        if not start_node:
+            return self.document_graph.root_id
+
+        # If current node is at the level just above our target, it's our parent
+        if start_node.level == target_level - 1:
+            return start_node_id
+
+        # If node has children, check the last child first (most recent node at that level)
+        children = self.document_graph.get_children(start_node_id)
+        if children:
+            last_child = children[-1]
+            # If the last child's level is less than our target level, it could be our parent
+            if last_child.level < target_level:
+                return self._find_parent_for_level(last_child.node_id, target_level)
+
+        # If we're here, we need to move up the tree
+        parent = self.document_graph.get_parent(start_node_id)
+        if parent:
+            return self._find_parent_for_level(parent.node_id, target_level)
+
+        # Fallback to root node if no appropriate parent is found
+        return self.document_graph.root_id
 
     def _extract_headers(self) -> List[Tuple[int, int, str]]:
         """
@@ -211,39 +246,6 @@ class MarkdownTOCChunker(BaseDocumentChunker):
         # Sort headers by line number
         headers.sort(key=lambda x: x[0])
         return headers
-
-    def _find_parent_for_level(self, node: TOCNode, target_level: int) -> TOCNode:
-        """
-        Find the appropriate parent node for a node with the given level.
-
-        Args:
-            node: Current node to start search from
-            target_level: The level of the node we want to find a parent for
-
-        Returns:
-            The appropriate parent node
-        """
-        # If this is a level 1 header, its parent is the root node
-        if target_level == 1:
-            return self.root_node
-
-        # If current node is at the level just above our target, it's our parent
-        if node.level == target_level - 1:
-            return node
-
-        # If node has children, check the last child first (most recent node at that level)
-        if node.children:
-            last_child = node.children[-1]
-            # If the last child's level is less than our target level, it could be our parent
-            if last_child.level < target_level:
-                return self._find_parent_for_level(last_child, target_level)
-
-        # If we're here, we need to move up the tree
-        if node.parent:
-            return self._find_parent_for_level(node.parent, target_level)
-
-        # Fallback to root node if no appropriate parent is found
-        return self.root_node
 
     def _extract_content(self, start_line: int, end_line: int) -> str:
         """

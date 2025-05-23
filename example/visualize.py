@@ -1,372 +1,221 @@
 import os
-from typing import Dict, List, Set
+from typing import Set
 
-from llama_index.core.schema import (
-    NodeRelationship,
-    ObjectType,
-    RelatedNodeInfo,
-    TextNode,
-)
+from node_chunker.data_model import DocumentGraph, DocumentNode
 
 
-def _get_node_title(node: TextNode) -> str:
-    """Safely get the title of a node."""
-    return node.metadata.get("title", f"Untitled Node {node.id_[:8]}")
-
-
-def _get_node_level(node: TextNode) -> int:
-    """Safely get the level of a node."""
-    return node.metadata.get("level", 1)
-
-
-def _format_node_metadata_for_markdown(node: TextNode) -> str:
-    """Format selected metadata into a Markdown string."""
-    parts = []
-    if "page_label" in node.metadata:
-        parts.append(f"Page(s): {node.metadata['page_label']}")
-    if node.metadata.get("context"):
-        parts.append(f"Context: `{node.metadata['context']}`")
-
-    # Example of adding more metadata if desired
-    # parts.append(f"Node ID: `{node.id_}`")
-    # if NodeRelationship.PARENT in node.relationships:
-    #     parent_info = node.relationships[NodeRelationship.PARENT]
-    #     if isinstance(parent_info, RelatedNodeInfo): # Check if it's a single RelatedNodeInfo
-    #         parts.append(f"Parent ID: `{parent_info.node_id}` (Type: {parent_info.node_type})")
-
-    if not parts:
-        return ""
-    return "> Metadata: " + " | ".join(parts) + "\n"
-
-
-def _write_node_recursive(
-    node_id: str,
-    md_file,
-    node_map: Dict[str, TextNode],
-    children_map: Dict[str, List[str]],
-    processed_node_ids: Set[str],
-):
-    """Recursively write a node and its children to the Markdown file."""
-    if node_id in processed_node_ids:
-        return
-    processed_node_ids.add(node_id)
-
-    node = node_map[node_id]
-    title = _get_node_title(node)
-
-    # TOCNode level 0 (Document Root) -> metadata['level'] = 0
-    # TOCNode level 1 (Chapter) -> metadata['level'] = 1
-    # Markdown H1 is '#'. We map TOC level 0 to H1, level 1 to H2, etc.
-    # Use level directly for Markdown heading (level 1 -> H1, level 2 -> H2, etc.)
-    markdown_heading_level = _get_node_level(node)
-    if markdown_heading_level <= 0:  # Ensure positive heading level
-        markdown_heading_level = 1
-    if markdown_heading_level > 6:  # Cap at H6
-        markdown_heading_level = 6
-
-    md_file.write(f"{'#' * markdown_heading_level} {title}\n\n")
-
-    # Print node text content as-is
-    if node.text is not None:
-        md_file.write(node.text + "\n\n")
-
-    if children_map.get(node_id):
-        child_ids = children_map[node_id]
-
-        def sort_key(child_id_val):
-            child_node = node_map[child_id_val]
-            start_page = child_node.metadata.get("start_page_idx", -1)
-            # y_pos = child_node.metadata.get("y_position", float('inf')) # Not in TextNode metadata by default
-            title_key = _get_node_title(child_node)
-            return (start_page, title_key)  # Add y_pos here if available and desired
-
-        sorted_child_ids = sorted(child_ids, key=sort_key)
-
-        for child_id_val in sorted_child_ids:
-            _write_node_recursive(
-                child_id_val, md_file, node_map, children_map, processed_node_ids
-            )
-
-
-def visualize_text_nodes_to_markdown(text_nodes: List[TextNode], output_md_path: str):
+def visualize_document_graph_to_markdown(document_graph: DocumentGraph, output_md_path: str):
     """
-    Visualizes a list of TextNode objects as a hierarchical Markdown file.
+    Visualizes a DocumentGraph as a hierarchical Markdown file.
 
     Args:
-        text_nodes: A list of TextNode objects, typically from a document chunker.
-        output_md_path: The path to save the generated Markdown file.
+        document_graph: A DocumentGraph object from the document chunker
+        output_md_path: The path to save the generated Markdown file
     """
-    if not text_nodes:
-        print("No text nodes to visualize.")
+    if not document_graph.nodes:
+        print("No nodes in document graph to visualize.")
         with open(output_md_path, "w", encoding="utf-8") as md_file:
             md_file.write("# Document Content\n\n")
-            md_file.write("No content found in the provided TextNodes.\n")
+            md_file.write("No content found in the DocumentGraph.\n")
         return
 
-    node_map: Dict[str, TextNode] = {node.id_: node for node in text_nodes}
+    def _write_graph_node_recursive(node_id: str, md_file, processed_node_ids: Set[str]):
+        """Recursively write a DocumentNode and its children to the Markdown file."""
+        if node_id in processed_node_ids:
+            return
+        processed_node_ids.add(node_id)
 
-    # Build children_map: parent_node_id -> list of child_node_ids
-    # This relies on NodeRelationship.CHILD being correctly populated.
-    children_map: Dict[str, List[str]] = {node_id: [] for node_id in node_map.keys()}
-    for node_id, node in node_map.items():
-        if NodeRelationship.CHILD in node.relationships:
-            child_infos = node.relationships[NodeRelationship.CHILD]
-            if not isinstance(child_infos, list):  # Handle single child case
-                child_infos = [child_infos]
+        node = document_graph.get_node(node_id)
+        if not node:
+            return
 
-            for child_info in child_infos:
-                if (
-                    child_info.node_id in node_map
-                ):  # Ensure child is part of the provided list
-                    children_map[node_id].append(child_info.node_id)
+        title = node.title or f"Untitled Node {node_id[:8]}"
 
-    # Identify root nodes: nodes whose parent is not another TextNode in the list
-    root_ids: List[str] = []
-    for node_id, node in node_map.items():
-        is_root = True
-        if NodeRelationship.PARENT in node.relationships:
-            parent_info = node.relationships[NodeRelationship.PARENT]
-            if isinstance(parent_info, RelatedNodeInfo):  # Ensure it's a single parent
-                if (
-                    parent_info.node_type == ObjectType.TEXT
-                    and parent_info.node_id in node_map
-                ):
-                    is_root = False  # Its parent is another TextNode in our list
-        if is_root:
-            root_ids.append(node_id)
+        # Use level directly for Markdown heading (level 1 -> H1, level 2 -> H2, etc.)
+        markdown_heading_level = node.level
+        if markdown_heading_level <= 0:  # Ensure positive heading level
+            markdown_heading_level = 1
+        if markdown_heading_level > 6:  # Cap at H6
+            markdown_heading_level = 6
 
-    def root_sort_key(node_id_val):
-        node = node_map[node_id_val]
-        level_key = _get_node_level(
-            node
-        )  # Prefer lower levels (e.g., Document Root) first
-        start_page = node.metadata.get("start_page_idx", -1)
-        title_key = _get_node_title(node)
-        return (level_key, start_page, title_key)
+        # Skip Document Root heading if it has no content
+        if not (node.title == "Document Root" and not node.content.strip()):
+            md_file.write(f"{'#' * markdown_heading_level} {title}\n\n")
 
-    sorted_root_ids = sorted(root_ids, key=root_sort_key)
+        # Add metadata if available
+        metadata_parts = []
+        if hasattr(node, 'page_num') and node.page_num >= 0:
+            if node.end_page is not None and node.end_page > node.page_num:
+                metadata_parts.append(f"Page(s): {node.page_num + 1}-{node.end_page + 1}")
+            else:
+                metadata_parts.append(f"Page: {node.page_num + 1}")
+        
+        if metadata_parts:
+            md_file.write("> Metadata: " + " | ".join(metadata_parts) + "\n\n")
+
+        # Write node content
+        if node.content and node.content.strip():
+            md_file.write(node.content + "\n\n")
+
+        # Process children in order
+        children = document_graph.get_children(node_id)
+        if children:
+            # Sort children by page number and title
+            sorted_children = sorted(
+                children, 
+                key=lambda child: (child.page_num, child.title)
+            )
+            
+            for child in sorted_children:
+                _write_graph_node_recursive(child.node_id, md_file, processed_node_ids)
 
     processed_node_ids: Set[str] = set()
 
     with open(output_md_path, "w", encoding="utf-8") as md_file:
-        # main_doc_title = "Document Content Structure"
-        # if sorted_root_ids:
-        # first_root_node = node_map[sorted_root_ids[0]]
-        # if "file_name" in first_root_node.metadata:
-        #    main_doc_title = f"Content of: {first_root_node.metadata['file_name']}"
+        # Start from root node
+        if document_graph.root_id:
+            _write_graph_node_recursive(document_graph.root_id, md_file, processed_node_ids)
 
-        # md_file.write(f"# {main_doc_title}\n\n")
-
-        if not sorted_root_ids and text_nodes:
-            # This case implies all nodes have a TextNode parent within the list,
-            # or relationships are structured unexpectedly.
-            md_file.write(
-                "Warning: Could not determine clear root nodes based on PARENT relationships. "
-            )
-            md_file.write(
-                "This might indicate a circular dependency or all nodes being children. "
-            )
-            md_file.write(
-                "Attempting to render all nodes sorted by page and title as a flat list if hierarchy fails.\n\n"
-            )
-            # Fallback: render all nodes, sorted. This might not show hierarchy well.
-            all_nodes_sorted_for_fallback = sorted(
-                text_nodes,
-                key=lambda n: (
-                    _get_node_level(n),
-                    n.metadata.get("start_page_idx", -1),
-                    _get_node_title(n),
-                ),
-            )
-            for node_obj in all_nodes_sorted_for_fallback:
-                if node_obj.id_ not in processed_node_ids:
-                    # For this fallback, we don't have children_map readily for non-roots
-                    # So, just print the node itself without recursion.
-                    # This part of the fallback needs refinement if true hierarchy is lost.
-                    # A better fallback might be to try to find nodes with level 0 or 1.
-                    # For now, the _write_node_recursive will only print the node if its children are in children_map.
-                    _write_node_recursive(
-                        node_obj.id_,
-                        md_file,
-                        node_map,
-                        children_map,
-                        processed_node_ids,
-                    )
-
-        else:
-            for root_id in sorted_root_ids:
-                if root_id not in processed_node_ids:
-                    _write_node_recursive(
-                        root_id, md_file, node_map, children_map, processed_node_ids
-                    )
-
-    print(f"Markdown visualization saved to {output_md_path}")
+    print(f"DocumentGraph markdown visualization saved to {output_md_path}")
 
 
-# Example Usage (commented out):
-# """
-from node_chunker.chunks import (
-    chunk_document_by_toc_to_text_nodes,
-)  # Replace with your actual chunker
+def visualize_chunker_to_markdown(chunker, output_md_path: str):
+    """
+    Convenience function to visualize DocumentGraph from a chunker.
 
-#
+    Args:
+        chunker: A document chunker instance (PDFTOCChunker, MarkdownTOCChunker, etc.)
+        output_md_path: The path to save the generated Markdown file
+    """
+    document_graph = chunker.get_document_graph()
+    visualize_document_graph_to_markdown(document_graph, output_md_path)
+
+
+def visualize_nodes_to_markdown(nodes: list[DocumentNode], output_md_path: str):
+    """
+    Visualizes a list of DocumentNode objects as a flat Markdown file.
+
+    Args:
+        nodes: A list of DocumentNode objects
+        output_md_path: The path to save the generated Markdown file
+    """
+    if not nodes:
+        print("No nodes to visualize.")
+        with open(output_md_path, "w", encoding="utf-8") as md_file:
+            md_file.write("# Document Content\n\n")
+            md_file.write("No content found in the provided nodes.\n")
+        return
+
+    with open(output_md_path, "w", encoding="utf-8") as md_file:
+        for node in nodes:
+            title = node.title or f"Untitled Node {node.node_id[:8]}"
+            
+            # Use level for heading
+            markdown_heading_level = max(1, min(6, node.level))
+            
+            md_file.write(f"{'#' * markdown_heading_level} {title}\n\n")
+            
+            # Add metadata
+            metadata_parts = []
+            if node.page_num >= 0:
+                if node.end_page is not None and node.end_page > node.page_num:
+                    metadata_parts.append(f"Page(s): {node.page_num + 1}-{node.end_page + 1}")
+                else:
+                    metadata_parts.append(f"Page: {node.page_num + 1}")
+            
+            if metadata_parts:
+                md_file.write("> Metadata: " + " | ".join(metadata_parts) + "\n\n")
+            
+            # Write content
+            if node.content and node.content.strip():
+                md_file.write(node.content + "\n\n")
+
+    print(f"Nodes markdown visualization saved to {output_md_path}")
+
+
+# Example Usage:
 if __name__ == "__main__":
-    # This is a placeholder. You'd get text_nodes from your actual chunking process.
-    # Example:
-    pdf_file_path = "example/data/test_markdown.rst"
-    display_name = os.path.basename(pdf_file_path)
-
-    try:
-        text_nodes = chunk_document_by_toc_to_text_nodes(pdf_file_path)
-
-        output_markdown_file = "example/ignore/document_visualization.md"
-        if text_nodes:
-            visualize_text_nodes_to_markdown(text_nodes, output_markdown_file)
-        else:
-            print(f"No text nodes were generated for {display_name}.")
-
-    except FileNotFoundError:
-        print(f"Error: PDF file not found at {pdf_file_path}")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-    # --- Dummy TextNode creation for testing the visualizer directly ---
-    doc_id = "doc_123"
-    node1 = TextNode(
-        id_="node_1",
-        text="Content of Chapter 1.",
-        metadata={
-            "title": "Chapter 1",
-            "level": 1,
-            "page_label": "1-5",
-            "start_page_idx": 0,
-            "file_name": "dummy.pdf",
-        },
-        relationships={
-            NodeRelationship.SOURCE: RelatedNodeInfo(
-                node_id=doc_id, node_type=ObjectType.DOCUMENT
-            ),
-            # NodeRelationship.PARENT: RelatedNodeInfo(node_id=doc_id, node_type=ObjectType.DOCUMENT) # Example if parent is doc
-        },
-    )
-    node2 = TextNode(
-        id_="node_2",
-        text="Content of Section 1.1.",
-        metadata={
-            "title": "Section 1.1",
-            "level": 2,
-            "page_label": "2-3",
-            "start_page_idx": 1,
-            "file_name": "dummy.pdf",
-            "context": "Chapter 1 > Section 1.1",
-        },
-        relationships={
-            NodeRelationship.SOURCE: RelatedNodeInfo(
-                node_id=doc_id, node_type=ObjectType.DOCUMENT
-            ),
-            NodeRelationship.PARENT: RelatedNodeInfo(
-                node_id="node_1", node_type=ObjectType.TEXT
-            ),
-        },
-    )
-    node3 = TextNode(
-        id_="node_3",
-        text="Content of Section 1.2.",
-        metadata={
-            "title": "Section 1.2",
-            "level": 2,
-            "page_label": "4-5",
-            "start_page_idx": 3,
-            "file_name": "dummy.pdf",
-            "context": "Chapter 1 > Section 1.2",
-        },
-        relationships={
-            NodeRelationship.SOURCE: RelatedNodeInfo(
-                node_id=doc_id, node_type=ObjectType.DOCUMENT
-            ),
-            NodeRelationship.PARENT: RelatedNodeInfo(
-                node_id="node_1", node_type=ObjectType.TEXT
-            ),
-        },
-    )
-    node4 = TextNode(
-        id_="node_4",
-        text="Content of Chapter 2.",
-        metadata={
-            "title": "Chapter 2",
-            "level": 1,
-            "page_label": "6-10",
-            "start_page_idx": 5,
-            "file_name": "dummy.pdf",
-        },
-        relationships={
-            NodeRelationship.SOURCE: RelatedNodeInfo(
-                node_id=doc_id, node_type=ObjectType.DOCUMENT
-            ),
-        },
-    )
-
-    # Manually set CHILD relationships for the dummy example as the chunker would
-    node1.relationships[NodeRelationship.CHILD] = [
-        RelatedNodeInfo(node_id="node_2", node_type=ObjectType.TEXT),
-        RelatedNodeInfo(node_id="node_3", node_type=ObjectType.TEXT),
-    ]
-
-    sample_text_nodes = [
-        node1,
-        node2,
-        node3,
-        node4,
-    ]  # Order doesn't strictly matter for visualizer input
-    output_file = "example/ignore/visualization_output_dummy.md"
-    visualize_text_nodes_to_markdown(sample_text_nodes, output_file)
-
-    # Test with an empty list
-    visualize_text_nodes_to_markdown([], "example/ignore/empty_visualization.md")
-
-    # Test with a "Document Root" node
-    root_doc_node = TextNode(
-        id_="doc_root_node",
-        text="This is the main document overview.",
-        metadata={
-            "title": "Document Root",
-            "level": 0,
-            "page_label": "1-10",
-            "start_page_idx": 0,
-            "file_name": "dummy_root.pdf",
-        },
-        relationships={
-            NodeRelationship.SOURCE: RelatedNodeInfo(
-                node_id="doc_456", node_type=ObjectType.DOCUMENT
+    from node_chunker.pdf_chunking import PDFTOCChunker
+    from node_chunker.md_chunking import MarkdownTOCChunker
+    from node_chunker.chunks import chunk_document_by_toc_to_document_graph, chunk_document_by_toc_to_nodes
+    
+    # Test with PDF using DocumentGraph approach
+    pdf_file_path = "example/data/test.pdf"
+    if os.path.exists(pdf_file_path):
+        try:
+            # Using the new function directly
+            document_graph = chunk_document_by_toc_to_document_graph(pdf_file_path)
+            visualize_document_graph_to_markdown(
+                document_graph, 
+                "example/ignore/pdf_graph_visualization.md"
             )
-        },
-    )
-    chapter_a_node = TextNode(
-        id_="chap_a",
-        text="Content of Chapter A.",
-        metadata={
-            "title": "Chapter A",
-            "level": 1,
-            "page_label": "1-5",
-            "start_page_idx": 0,
-            "file_name": "dummy_root.pdf",
-            "context": "Chapter A",
-        },
-        relationships={
-            NodeRelationship.SOURCE: RelatedNodeInfo(
-                node_id="doc_456", node_type=ObjectType.DOCUMENT
-            ),
-            NodeRelationship.PARENT: RelatedNodeInfo(
-                node_id="doc_root_node", node_type=ObjectType.TEXT
-            ),
-        },
-    )
-    root_doc_node.relationships[NodeRelationship.CHILD] = [
-        RelatedNodeInfo(node_id="chap_a", node_type=ObjectType.TEXT)
-    ]
+            
+            # Also test with chunker directly
+            with PDFTOCChunker(pdf_file_path, os.path.basename(pdf_file_path)) as chunker:
+                visualize_chunker_to_markdown(
+                    chunker,
+                    "example/ignore/pdf_chunker_visualization.md"
+                )
+                
+            # Test nodes visualization
+            nodes = chunk_document_by_toc_to_nodes(pdf_file_path)
+            visualize_nodes_to_markdown(nodes, "example/ignore/pdf_nodes_visualization.md")
+            
+        except Exception as e:
+            print(f"Error processing PDF: {e}")
+    
+    # Test with Markdown using DocumentGraph approach
+    markdown_content = """# Chapter 1
+This is chapter 1 content.
 
-    visualize_text_nodes_to_markdown(
-        [root_doc_node, chapter_a_node],
-        "example/ignore/visualization_with_root_dummy.md",
-    )
-# """
+## Section 1.1
+This is section 1.1 content.
+
+## Section 1.2
+This is section 1.2 content.
+
+# Chapter 2
+This is chapter 2 content.
+"""
+    
+    try:
+        # Using the new function directly
+        document_graph = chunk_document_by_toc_to_document_graph(
+            markdown_content, 
+            format_type="md"
+        )
+        visualize_document_graph_to_markdown(
+            document_graph,
+            "example/ignore/markdown_graph_visualization.md"
+        )
+        
+        # Also test getting nodes directly
+        nodes = chunk_document_by_toc_to_nodes(markdown_content, format_type="md")
+        print(f"Found {len(nodes)} nodes in markdown content")
+        visualize_nodes_to_markdown(nodes, "example/ignore/markdown_nodes_visualization.md")
+        
+    except Exception as e:
+        print(f"Error processing Markdown: {e}")
+
+    # Test creating DocumentGraph manually
+    test_graph = DocumentGraph("Test Document")
+    
+    # Add some test nodes
+    chap1_id = test_graph.add_node("Chapter 1", "This is chapter 1 content.", level=1, page_num=0)
+    test_graph.add_child(test_graph.root_id, chap1_id)
+    
+    sec1_id = test_graph.add_node("Section 1.1", "This is section 1.1 content.", level=2, page_num=1)
+    test_graph.add_child(chap1_id, sec1_id)
+    
+    sec2_id = test_graph.add_node("Section 1.2", "This is section 1.2 content.", level=2, page_num=2)
+    test_graph.add_child(chap1_id, sec2_id)
+    
+    chap2_id = test_graph.add_node("Chapter 2", "This is chapter 2 content.", level=1, page_num=3)
+    test_graph.add_child(test_graph.root_id, chap2_id)
+    
+    visualize_document_graph_to_markdown(test_graph, "example/ignore/manual_test_graph.md")
+    
+    # Test pre-order traversal
+    print("Pre-order traversal:")
+    for node in test_graph.get_content():
+        print(f"  {node.title} (Level {node.level})")

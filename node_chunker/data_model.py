@@ -42,8 +42,6 @@ class DocumentNode:
 class DocumentGraph:
     """
     A graph-based representation of a document's hierarchical structure.
-
-    Provides pre-order traversal for document content extraction.
     """
 
     def __init__(self, root_title: str = "Document Root"):
@@ -207,3 +205,25 @@ class DocumentGraph:
             build_tree_string(start_id, 0)
 
         return "\n".join(result)
+
+    def get_parent(self, node_id: str) -> Optional[DocumentNode]:
+        """Get the parent of a node."""
+        node = self.nodes.get(node_id)
+        if not node or not node.parent_id:
+            return None
+        return self.nodes.get(node.parent_id)
+
+    def get_ancestors(self, node_id: str) -> List[DocumentNode]:
+        """Get all ancestors of a node (path to root)."""
+        ancestors = []
+        current_node = self.get_node(node_id)
+
+        while current_node and current_node.parent_id:
+            parent = self.get_parent(current_node.node_id)
+            if parent:
+                ancestors.append(parent)
+                current_node = parent
+            else:
+                break
+
+        return ancestors

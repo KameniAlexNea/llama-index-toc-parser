@@ -10,7 +10,7 @@ from .chunks import (
     chunk_document_by_toc_to_text_nodes,
     get_supported_formats,
 )
-from .document_chunking import BaseDocumentChunker, TOCNode
+from .document_chunking import BaseDocumentChunker
 from .docx_chunking import DOCXTOCChunker
 from .html_chunking import HTMLTOCChunker
 from .jupyter_chunking import JupyterNotebookTOCChunker
@@ -27,7 +27,6 @@ __all__ = [
     "MarkdownTOCChunker",
     "PDFTOCChunker",
     "RSTTOCChunker",
-    "TOCNode",
     "chunk_document_by_toc_to_text_nodes",
     "get_supported_formats",
 ]

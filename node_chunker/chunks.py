@@ -4,8 +4,7 @@ import os
 from enum import Enum
 from typing import List, Optional, Set, Union
 
-from llama_index.core.schema import TextNode
-
+from .data_model import DocumentGraph, DocumentNode
 from .utils import download_temp_file, read_file_content
 
 # Get logger for this module
@@ -79,26 +78,6 @@ def get_supported_formats() -> Set[DocumentFormat]:
     return supported
 
 
-def download_file_from_url(url: str, suffix: str = None) -> str:
-    """
-    Download a file from a URL and save it to a temporary file.
-
-    Args:
-        url: The URL of the file to download
-        suffix: Optional file extension with dot (e.g., ".docx", ".pdf")
-
-    Returns:
-        Path to the downloaded temporary file
-
-    Note: This function is deprecated, use utils.download_temp_file instead
-    """
-    logger.warning(
-        "download_file_from_url is deprecated. Use utils.download_temp_file instead."
-    )
-
-    return download_temp_file(url, suffix)
-
-
 def _import_chunker_class(format_type: DocumentFormat):
     """
     Dynamically import a chunker class based on format type.
@@ -139,13 +118,13 @@ def _import_chunker_class(format_type: DocumentFormat):
         return None
 
 
-def chunk_document_by_toc_to_text_nodes(
+def chunk_document_by_toc_to_nodes(
     source: str,
     is_url: bool = None,
     format_type: Optional[Union[DocumentFormat, str]] = None,
-) -> List[TextNode]:
+) -> List[DocumentNode]:
     """
-    Create a TOC-based hierarchical chunking of a document and return TextNode objects.
+    Create a TOC-based hierarchical chunking of a document and return DocumentNode objects.
 
     Args:
         source: Path to the document file or URL, or content text
@@ -153,7 +132,91 @@ def chunk_document_by_toc_to_text_nodes(
         format_type: Document format to use (PDF by default if not specified)
 
     Returns:
+        A list of DocumentNode objects representing the document chunks in pre-order.
+
+    Raises:
+        ValueError: If the format is unsupported or document processing fails
+        ImportError: If required dependencies are missing
+    """
+    document_graph = chunk_document_by_toc_to_document_graph(source, is_url, format_type)
+    return list(document_graph.get_content())
+
+
+def chunk_document_by_toc_to_text_nodes(
+    source: str,
+    is_url: bool = None,
+    format_type: Optional[Union[DocumentFormat, str]] = None,
+):
+    """
+    Legacy function for backward compatibility with LlamaIndex TextNode format.
+    
+    Args:
+        source: Path to the document file or URL, or content text
+        is_url: Force URL interpretation if True, file path if False, or auto-detect if None
+        format_type: Document format to use (PDF by default if not specified)
+
+    Returns:
         A list of TextNode objects representing the document chunks.
+    """
+    # Import TextNode only when needed for backward compatibility
+    from llama_index.core.schema import TextNode
+    
+    # Get the document graph and convert to TextNodes via chunker
+    document_graph = chunk_document_by_toc_to_document_graph(source, is_url, format_type)
+    
+    # Use the chunker's get_text_nodes method for proper conversion
+    if format_type == DocumentFormat.MARKDOWN or (format_type is None and source.endswith(('.md', '.markdown'))):
+        MarkdownTOCChunker = _import_chunker_class(DocumentFormat.MARKDOWN)
+        is_file_path = os.path.exists(source) and not (is_url or source.startswith(("http://", "https://", "ftp://")))
+        
+        if is_file_path:
+            markdown_text = read_file_content(source)
+            source_name = source
+        else:
+            markdown_text = source
+            source_name = "markdown_text"
+            
+        with MarkdownTOCChunker(markdown_text, source_name) as chunker:
+            return chunker.get_text_nodes()
+    
+    elif format_type == DocumentFormat.PDF or (format_type is None and source.endswith('.pdf')):
+        PDFTOCChunker = _import_chunker_class(DocumentFormat.PDF)
+        temp_file_path = None
+        actual_source_path = source
+        
+        try:
+            if is_url or source.startswith(("http://", "https://", "ftp://")):
+                temp_file_path = download_temp_file(source, suffix=".pdf")
+                actual_source_path = temp_file_path
+            
+            with PDFTOCChunker(actual_source_path, source) as chunker:
+                return chunker.get_text_nodes()
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except Exception as e:
+                    logger.warning(f"Failed to delete temporary file {temp_file_path}: {e}")
+    
+    else:
+        raise ValueError(f"TextNode conversion not yet implemented for format: {format_type}")
+
+
+def chunk_document_by_toc_to_document_graph(
+    source: str,
+    is_url: bool = None,
+    format_type: Optional[Union[DocumentFormat, str]] = None,
+) -> DocumentGraph:
+    """
+    Create a TOC-based hierarchical chunking of a document and return DocumentGraph.
+
+    Args:
+        source: Path to the document file or URL, or content text
+        is_url: Force URL interpretation if True, file path if False, or auto-detect if None
+        format_type: Document format to use (PDF by default if not specified)
+
+    Returns:
+        A DocumentGraph object representing the document structure.
 
     Raises:
         ValueError: If the format is unsupported or document processing fails
@@ -181,7 +244,7 @@ def chunk_document_by_toc_to_text_nodes(
 
     temp_file_path = None
     actual_source_path = source
-    source_name_for_metadata = source  # Original source name for metadata
+    source_name_for_metadata = source
 
     try:
         if is_url is None:
@@ -189,112 +252,21 @@ def chunk_document_by_toc_to_text_nodes(
 
         # Handle specific formats
         if format_type == DocumentFormat.MARKDOWN:
-            # For markdown, source can be either a file path or the markdown text itself
             is_file_path = os.path.exists(source) and not is_url
 
             if is_file_path:
-                # It's a file path to a markdown file
                 markdown_text = read_file_content(source)
             else:
-                # It's the markdown text itself
                 markdown_text = source
-                source_name_for_metadata = "markdown_text"  # Default name
+                source_name_for_metadata = "markdown_text"
 
             MarkdownTOCChunker = _import_chunker_class(DocumentFormat.MARKDOWN)
             with MarkdownTOCChunker(markdown_text, source_name_for_metadata) as chunker:
-                chunker.build_toc_tree()
-                return chunker.get_text_nodes()
-
-        elif format_type == DocumentFormat.HTML:
-            # HTML handling
-            is_file_path = os.path.exists(source) and not is_url
-
-            if is_file_path:
-                # It's a file path to an HTML file
-                html_content = read_file_content(source)
-            elif is_url:
-                # Download HTML content from URL
-                import requests
-
-                response = requests.get(source, timeout=30)
-                response.raise_for_status()
-                html_content = response.text
-                source_name_for_metadata = source  # Use URL as source name
-            else:
-                # It's the HTML content itself
-                html_content = source
-                source_name_for_metadata = "html_content"  # Default name
-
-            HTMLTOCChunker = _import_chunker_class(DocumentFormat.HTML)
-            with HTMLTOCChunker(html_content, source_name_for_metadata) as chunker:
-                chunker.build_toc_tree()
-                return chunker.get_text_nodes()
-
-        elif format_type == DocumentFormat.DOCX:
-            # Word document handling
-            if is_url:
-                logger.info(f"Downloading Word document from URL: {source}")
-                from .utils import download_temp_file
-
-                temp_file_path = download_temp_file(source, suffix=".docx")
-                actual_source_path = temp_file_path
-
-            DOCXTOCChunker = _import_chunker_class(DocumentFormat.DOCX)
-            with DOCXTOCChunker(
-                docx_path=actual_source_path,
-                source_display_name=source_name_for_metadata,
-            ) as chunker:
-                chunker.build_toc_tree()
-                return chunker.get_text_nodes()
-
-        elif format_type == DocumentFormat.JUPYTER:
-            # Jupyter notebook handling
-            if is_url:
-                logger.info(f"Downloading Jupyter notebook from URL: {source}")
-                from .utils import download_temp_file
-
-                temp_file_path = download_temp_file(source, suffix=".ipynb")
-                actual_source_path = temp_file_path
-
-            JupyterNotebookTOCChunker = _import_chunker_class(DocumentFormat.JUPYTER)
-            with JupyterNotebookTOCChunker(
-                notebook_path=actual_source_path,
-                source_display_name=source_name_for_metadata,
-            ) as chunker:
-                chunker.build_toc_tree()
-                return chunker.get_text_nodes()
-
-        elif format_type == DocumentFormat.RST:
-            # reStructuredText handling
-            is_file_path = os.path.exists(source) and not is_url
-
-            if is_file_path:
-                # It's a file path to an RST file
-                rst_content = read_file_content(source)
-            elif is_url:
-                # Download RST content from URL
-                import requests
-
-                response = requests.get(source, timeout=30)
-                response.raise_for_status()
-                rst_content = response.text
-                source_name_for_metadata = source  # Use URL as source name
-            else:
-                # It's the RST content itself
-                rst_content = source
-                source_name_for_metadata = "rst_content"  # Default name
-
-            RSTTOCChunker = _import_chunker_class(DocumentFormat.RST)
-            with RSTTOCChunker(rst_content, source_name_for_metadata) as chunker:
-                chunker.build_toc_tree()
-                return chunker.get_text_nodes()
+                return chunker.get_document_graph()
 
         elif format_type == DocumentFormat.PDF:
-            # PDF handling
             if is_url:
                 logger.info(f"Downloading PDF from URL: {source}")
-                from .utils import download_temp_file
-
                 temp_file_path = download_temp_file(source, suffix=".pdf")
                 actual_source_path = temp_file_path
 
@@ -303,20 +275,17 @@ def chunk_document_by_toc_to_text_nodes(
                 pdf_path=actual_source_path,
                 source_display_name=source_name_for_metadata,
             ) as chunker:
-                chunker.build_toc_tree()
-                return chunker.get_text_nodes()
+                return chunker.get_document_graph()
 
         else:
-            raise ValueError(f"Unsupported format type: {format_type}")
+            raise ValueError(f"DocumentGraph support not yet implemented for format: {format_type}")
 
     except Exception as e:
-        logger.error(f"Error processing document: {e!s}")
+        logger.error(f"Error processing document: {e}")
         raise
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             try:
                 os.unlink(temp_file_path)
             except Exception as e:
-                logger.warning(
-                    f"Failed to delete temporary file {temp_file_path}: {e!s}"
-                )
+                logger.warning(f"Failed to delete temporary file {temp_file_path}: {e}")
