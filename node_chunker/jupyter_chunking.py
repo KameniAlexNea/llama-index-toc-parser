@@ -6,7 +6,7 @@ from typing import Optional
 
 from markitdown import MarkItDown
 
-from .document_chunking import BaseDocumentChunker, TOCNode
+from .document_chunking import BaseDocumentChunker, DocumentGraph
 from .md_chunking import MarkdownTOCChunker
 
 # Get logger for this module
@@ -72,7 +72,7 @@ class JupyterNotebookTOCChunker(BaseDocumentChunker):
             if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
 
-    def build_toc_tree(self) -> TOCNode:
+    def build_toc_tree(self) -> DocumentGraph:
         """
         Build a tree structure from the converted Markdown content.
 
@@ -85,8 +85,8 @@ class JupyterNotebookTOCChunker(BaseDocumentChunker):
         if self.markdown_content is None:
             logger.error("Markdown content is not available after load_document.")
             # Return a basic root node if conversion failed
-            self.root_node = TOCNode(
-                title="Notebook Root", page_num=0, level=0, content=""
+            self.root_node = DocumentGraph(
+                "Notebook Root"
             )
             return self.root_node
 
