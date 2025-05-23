@@ -58,7 +58,9 @@ class JupyterNotebookTOCChunker(BaseDocumentChunker):
                     result = md_converter.convert(temp_file_path)
                     self.markdown_content = result.text_content
                 except json.JSONDecodeError:
-                    logger.error("Source is neither a valid file path nor valid JSON content")
+                    logger.error(
+                        "Source is neither a valid file path nor valid JSON content"
+                    )
                     raise
 
             self._document_loaded = True

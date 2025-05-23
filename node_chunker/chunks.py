@@ -92,8 +92,10 @@ def download_file_from_url(url: str, suffix: str = None) -> str:
 
     Note: This function is deprecated, use utils.download_temp_file instead
     """
-    logger.warning("download_file_from_url is deprecated. Use utils.download_temp_file instead.")
-    from .utils import download_temp_file
+    logger.warning(
+        "download_file_from_url is deprecated. Use utils.download_temp_file instead."
+    )
+
     return download_temp_file(url, suffix)
 
 
@@ -213,6 +215,7 @@ def chunk_document_by_toc_to_text_nodes(
             elif is_url:
                 # Download HTML content from URL
                 import requests
+
                 response = requests.get(source, timeout=30)
                 response.raise_for_status()
                 html_content = response.text
@@ -232,6 +235,7 @@ def chunk_document_by_toc_to_text_nodes(
             if is_url:
                 logger.info(f"Downloading Word document from URL: {source}")
                 from .utils import download_temp_file
+
                 temp_file_path = download_temp_file(source, suffix=".docx")
                 actual_source_path = temp_file_path
 
@@ -248,6 +252,7 @@ def chunk_document_by_toc_to_text_nodes(
             if is_url:
                 logger.info(f"Downloading Jupyter notebook from URL: {source}")
                 from .utils import download_temp_file
+
                 temp_file_path = download_temp_file(source, suffix=".ipynb")
                 actual_source_path = temp_file_path
 
@@ -269,6 +274,7 @@ def chunk_document_by_toc_to_text_nodes(
             elif is_url:
                 # Download RST content from URL
                 import requests
+
                 response = requests.get(source, timeout=30)
                 response.raise_for_status()
                 rst_content = response.text
@@ -288,6 +294,7 @@ def chunk_document_by_toc_to_text_nodes(
             if is_url:
                 logger.info(f"Downloading PDF from URL: {source}")
                 from .utils import download_temp_file
+
                 temp_file_path = download_temp_file(source, suffix=".pdf")
                 actual_source_path = temp_file_path
 
@@ -303,11 +310,13 @@ def chunk_document_by_toc_to_text_nodes(
             raise ValueError(f"Unsupported format type: {format_type}")
 
     except Exception as e:
-        logger.error(f"Error processing document: {str(e)}")
+        logger.error(f"Error processing document: {e!s}")
         raise
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             try:
                 os.unlink(temp_file_path)
             except Exception as e:
-                logger.warning(f"Failed to delete temporary file {temp_file_path}: {str(e)}")
+                logger.warning(
+                    f"Failed to delete temporary file {temp_file_path}: {e!s}"
+                )

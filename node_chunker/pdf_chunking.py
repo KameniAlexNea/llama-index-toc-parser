@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List
+from typing import List, Optional
 
 import fitz  # PyMuPDF
 
@@ -75,23 +75,27 @@ class PDFTOCChunker(BaseDocumentChunker):
         Returns the y-coordinate (bbox[1]) or 0.0 if not found.
         """
         # Clean the title for matching
-        clean_title = "".join(c for c in title if c.isalnum() or c.isspace()).strip().lower()
+        clean_title = (
+            "".join(c for c in title if c.isalnum() or c.isspace()).strip().lower()
+        )
         if not clean_title:
             return 0.0
 
         blocks = page.get_text("dict", flags=TEXT_EXTRACTION_FLAGS)["blocks"]
-        
+
         for block in blocks:
             if block.get("type") == 0:  # Text block
                 for line in block.get("lines", []):
                     line_text = "".join(span["text"] for span in line.get("spans", []))
-                    clean_line = "".join(
-                        c for c in line_text if c.isalnum() or c.isspace()
-                    ).strip().lower()
-                    
+                    clean_line = (
+                        "".join(c for c in line_text if c.isalnum() or c.isspace())
+                        .strip()
+                        .lower()
+                    )
+
                     if clean_title in clean_line:
                         return block["bbox"][1]  # y0 of the block
-                        
+
         return 0.0  # Fallback if title not found
 
     def _process_outline(self, toc_items: List, parent_node: TOCNode, level=1) -> None:
@@ -141,7 +145,9 @@ class PDFTOCChunker(BaseDocumentChunker):
                         if toc_items[j][0] > current_item_level:  # Deeper level
                             children_toc_items.append(toc_items[j])
                             processed_indices.add(j)
-                        elif toc_items[j][0] <= current_item_level:  # Same or higher level
+                        elif (
+                            toc_items[j][0] <= current_item_level
+                        ):  # Same or higher level
                             break
                         j += 1
 
@@ -211,8 +217,7 @@ class PDFTOCChunker(BaseDocumentChunker):
 
         # Ensure content_end_page_idx is valid
         actual_content_end_page = min(
-            max(node.page_num, content_end_page_idx),
-            self.doc.page_count - 1
+            max(node.page_num, content_end_page_idx), self.doc.page_count - 1
         )
 
         if node.page_num > actual_content_end_page:
@@ -259,13 +264,15 @@ class PDFTOCChunker(BaseDocumentChunker):
 
             # Determine y-boundaries for the current page
             start_y = (
-                start_y_on_first_page if page_num == start_page_idx and 
-                start_y_on_first_page is not None else 0.0
+                start_y_on_first_page
+                if page_num == start_page_idx and start_y_on_first_page is not None
+                else 0.0
             )
-            
+
             end_y = (
-                end_y_on_final_page if page_num == end_page_idx and 
-                end_y_on_final_page is not None else float("inf")
+                end_y_on_final_page
+                if page_num == end_page_idx and end_y_on_final_page is not None
+                else float("inf")
             )
 
             # If start_y is greater or equal to end_y on the same page, skip
@@ -274,7 +281,7 @@ class PDFTOCChunker(BaseDocumentChunker):
 
             blocks = page.get_text("dict", flags=TEXT_EXTRACTION_FLAGS)["blocks"]
             page_content = []
-            
+
             for block in blocks:
                 if block.get("type") == 0:  # Text block
                     block_y0 = block["bbox"][1]  # Top of block
@@ -284,9 +291,11 @@ class PDFTOCChunker(BaseDocumentChunker):
                     if block_y1 > start_y and block_y0 < end_y:
                         block_text_parts = []
                         for line in block.get("lines", []):
-                            line_text = "".join(span["text"] for span in line.get("spans", []))
+                            line_text = "".join(
+                                span["text"] for span in line.get("spans", [])
+                            )
                             block_text_parts.append(line_text)
-                        
+
                         if block_text_parts:
                             page_content.append(" ".join(block_text_parts))
 

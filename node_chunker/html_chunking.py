@@ -1,7 +1,6 @@
 import logging
 import os
 import tempfile
-from typing import Optional
 
 from markitdown import MarkItDown
 

@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, List, Optional, Pattern, Tuple, Union
+from typing import Dict, List, Pattern, Tuple
 
 from .document_chunking import BaseDocumentChunker, TOCNode
 
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class MarkdownTOCChunker(BaseDocumentChunker):
     """
     A document chunker that creates a hierarchical tree of nodes based on Markdown headers.
-    
+
     This chunker analyzes markdown text, identifies headings (both ATX and Setext style),
     and builds a tree structure representing the document's organization. It handles
     code blocks appropriately to prevent false header detection.
@@ -19,9 +19,13 @@ class MarkdownTOCChunker(BaseDocumentChunker):
 
     # Regex patterns for markdown parsing
     ATX_HEADER_PATTERN: Pattern = re.compile(r"^(#{1,6})\s+(.+?)(?:\s+#+)?$")
-    FENCED_CODE_BLOCK_PATTERN: Pattern = re.compile(r"```(?:\w+)?\n[\s\S]*?\n```", re.MULTILINE)
-    INDENTED_CODE_BLOCK_PATTERN: Pattern = re.compile(r"(?:^( {4}|\t).*\n)+", re.MULTILINE)
-    
+    FENCED_CODE_BLOCK_PATTERN: Pattern = re.compile(
+        r"```(?:\w+)?\n[\s\S]*?\n```", re.MULTILINE
+    )
+    INDENTED_CODE_BLOCK_PATTERN: Pattern = re.compile(
+        r"(?:^( {4}|\t).*\n)+", re.MULTILINE
+    )
+
     def __init__(self, markdown_text: str, source_display_name: str):
         """
         Initialize the chunker with markdown text.
@@ -29,13 +33,13 @@ class MarkdownTOCChunker(BaseDocumentChunker):
         Args:
             markdown_text: The markdown text content to be parsed
             source_display_name: The original name of the source (e.g., filename or "markdown_text")
-        
+
         Raises:
             ValueError: If markdown_text is None or empty
         """
         if not markdown_text:
             raise ValueError("Markdown text cannot be None or empty")
-            
+
         super().__init__(source_path="", source_display_name=source_display_name)
         self.markdown_text = markdown_text
         self.lines: List[str] = []
@@ -47,10 +51,10 @@ class MarkdownTOCChunker(BaseDocumentChunker):
     def load_document(self) -> None:
         """
         Load the markdown document and split into lines.
-        
-        This method prepares the markdown text for processing by splitting it into 
+
+        This method prepares the markdown text for processing by splitting it into
         individual lines that can be analyzed for headers and content.
-        
+
         Raises:
             Exception: If the markdown text can't be split into lines
         """
@@ -64,13 +68,13 @@ class MarkdownTOCChunker(BaseDocumentChunker):
     def build_toc_tree(self) -> TOCNode:
         """
         Build a tree structure from the markdown headers.
-        
+
         This method analyzes the markdown document for headers, creates a hierarchical
         structure, and extracts content for each section.
 
         Returns:
             The root node of the TOC tree
-            
+
         Raises:
             ValueError: If headers can't be extracted properly
         """
@@ -101,13 +105,13 @@ class MarkdownTOCChunker(BaseDocumentChunker):
             logger.error(f"Error building tree from headers: {e}")
             # Fallback to basic document
             self.root_node.content = self.original_text
-            
+
         return self.root_node
 
     def _build_tree_from_headers(self, headers: List[Tuple[int, int, str]]) -> None:
         """
         Build the TOC tree from the extracted headers.
-        
+
         Args:
             headers: List of tuples with (line_number, header_level, header_title)
         """
@@ -149,14 +153,14 @@ class MarkdownTOCChunker(BaseDocumentChunker):
 
         # Track potential Setext headers for validation
         potential_setext_headers: List[Tuple[int, str]] = []
-        
+
         for line_num, line in enumerate(self.lines):
             line_stripped = line.strip()
-            
+
             # Skip empty lines
             if not line_stripped:
                 continue
-                
+
             # Check for ATX style headers (# Header)
             atx_match = self.ATX_HEADER_PATTERN.match(line_stripped)
             if atx_match:
@@ -166,7 +170,7 @@ class MarkdownTOCChunker(BaseDocumentChunker):
                 continue
 
             # Store potential Setext header candidates
-            if line_num > 0 and not line_num in [h[0] for h in headers]:
+            if line_num > 0 and line_num not in [h[0] for h in headers]:
                 potential_setext_headers.append((line_num, line_stripped))
 
         # Process potential Setext headers
@@ -174,18 +178,35 @@ class MarkdownTOCChunker(BaseDocumentChunker):
             # Check if this line could be a Setext header underline
             if all(c == "=" for c in line):
                 # Check the previous line to see if it's not an ATX header
-                if line_num > 0 and self.lines[line_num-1].strip() and not self.ATX_HEADER_PATTERN.match(self.lines[line_num-1].strip()):
-                    title = self.lines[line_num-1].strip()
-                    headers.append((line_num-1, 1, title))  # Level 1 header
+                if (
+                    line_num > 0
+                    and self.lines[line_num - 1].strip()
+                    and not self.ATX_HEADER_PATTERN.match(
+                        self.lines[line_num - 1].strip()
+                    )
+                ):
+                    title = self.lines[line_num - 1].strip()
+                    headers.append((line_num - 1, 1, title))  # Level 1 header
             elif all(c == "-" for c in line):
                 # Make sure it's not a list item, horizontal rule, or table delimiter
-                if line_num > 0 and self.lines[line_num-1].strip() and not self.ATX_HEADER_PATTERN.match(self.lines[line_num-1].strip()):
-                    prev_line = self.lines[line_num-1].strip()
+                if (
+                    line_num > 0
+                    and self.lines[line_num - 1].strip()
+                    and not self.ATX_HEADER_PATTERN.match(
+                        self.lines[line_num - 1].strip()
+                    )
+                ):
+                    prev_line = self.lines[line_num - 1].strip()
                     # Ensure it's not already a header and not a horizontal rule (---)
                     if len(line) >= 2 and prev_line:
                         # Avoid false positives like list items or table delimiters
-                        if not prev_line.startswith(("-", "*", "+")) and not "|" in prev_line:
-                            headers.append((line_num-1, 2, prev_line))  # Level 2 header
+                        if (
+                            not prev_line.startswith(("-", "*", "+"))
+                            and "|" not in prev_line
+                        ):
+                            headers.append(
+                                (line_num - 1, 2, prev_line)
+                            )  # Level 2 header
 
         # Sort headers by line number
         headers.sort(key=lambda x: x[0])
@@ -247,12 +268,12 @@ class MarkdownTOCChunker(BaseDocumentChunker):
     def _process_code_blocks(self) -> None:
         """
         Extract fenced and indented code blocks from the markdown text and replace them with placeholders.
-        
+
         This prevents code block content (especially comments) from being misidentified as headers.
         """
         # Keep original text for later restoration
         self.original_text = self.markdown_text
-        
+
         # Process fenced code blocks first (```code```)
         def _fenced_replacer(match):
             placeholder = f"__CODE_BLOCK_{len(self.code_blocks)}__"
@@ -262,7 +283,7 @@ class MarkdownTOCChunker(BaseDocumentChunker):
         self.markdown_text = self.FENCED_CODE_BLOCK_PATTERN.sub(
             _fenced_replacer, self.markdown_text
         )
-        
+
         # Then process indented code blocks (4 spaces or tab)
         def _indented_replacer(match):
             placeholder = f"__INDENTED_BLOCK_{len(self.code_blocks)}__"
@@ -276,10 +297,10 @@ class MarkdownTOCChunker(BaseDocumentChunker):
     def _restore_code_blocks(self, text: str) -> str:
         """
         Restore code block placeholders in text back to their original code block content.
-        
+
         Args:
             text: Text containing code block placeholders
-            
+
         Returns:
             Text with original code blocks restored
         """

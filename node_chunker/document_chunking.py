@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 class TOCNode(BaseModel):
     """
     Represents a node in the Table of Contents tree structure.
-    
+
     Attributes:
         title: The node title
         page_num: The page number where this node starts
@@ -26,6 +26,7 @@ class TOCNode(BaseModel):
         end_page: Optional ending page number of this section
         y_position: Optional y-coordinate of the heading on its page
     """
+
     title: str
     page_num: int
     level: int
@@ -48,7 +49,7 @@ class TOCNode(BaseModel):
 class BaseDocumentChunker(ABC):
     """
     Abstract base class for document chunkers that create hierarchical trees of nodes.
-    
+
     This class defines the interface for all document chunkers and provides
     common functionality for converting TOC structures into TextNodes.
     """
@@ -97,7 +98,7 @@ class BaseDocumentChunker(ABC):
         """
         Convert the TOCNode tree into a list of LlamaIndex TextNode objects,
         preserving hierarchical relationships.
-        
+
         Returns:
             A list of TextNode objects representing the document chunks.
         """
@@ -124,10 +125,14 @@ class BaseDocumentChunker(ABC):
             )
 
             # Skip empty Document Root nodes
-            if (toc_node.title == "Document Root" and 
-                not toc_node.content.strip() and 
-                toc_node.level == 0):
-                if not any(tn.metadata.get("title") == "Document Root" for tn in text_node_list):
+            if (
+                toc_node.title == "Document Root"
+                and not toc_node.content.strip()
+                and toc_node.level == 0
+            ):
+                if not any(
+                    tn.metadata.get("title") == "Document Root" for tn in text_node_list
+                ):
                     pass  # Skip adding Document Root if it has no content
             else:
                 text_node = TextNode(
@@ -177,7 +182,7 @@ class BaseDocumentChunker(ABC):
 
         path_elements = []
         current = toc_node
-        
+
         while current:
             # Skip adding "Document Root" to the context path
             if current.title != "Document Root":
@@ -191,7 +196,7 @@ class BaseDocumentChunker(ABC):
     ) -> Dict[NodeRelationship, Any]:
         """Create relationship dictionary for a node."""
         relationships = {}
-        
+
         # Add source relationship
         relationships[NodeRelationship.SOURCE] = RelatedNodeInfo(
             node_id=self.document_id,
@@ -216,7 +221,7 @@ class BaseDocumentChunker(ABC):
                         node_id=child_text_node_id, node_type=ObjectType.TEXT
                     )
                 )
-                
+
         if child_related_nodes:
             relationships[NodeRelationship.CHILD] = child_related_nodes
 
